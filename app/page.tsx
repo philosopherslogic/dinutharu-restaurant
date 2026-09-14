@@ -4,10 +4,12 @@ import MenuGrid from '@/components/MenuGrid';
 import CartBar from '@/components/CartBar';
 import ItemModal from '@/components/ItemModal';
 import OrderModal from '@/components/OrderModal';
+import Navbar from '@/components/Navbar';
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#070707]">
+      <Navbar />
       <Hero />
       <MenuGrid />
       <CartBar />
