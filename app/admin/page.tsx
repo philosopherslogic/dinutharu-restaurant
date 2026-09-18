@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
@@ -45,7 +45,6 @@ interface Order {
   created_at: string;
 }
 
-// Restaurant Coordinates for Google Maps Navigation Origin (Bokundara / Piliyandala)
 const RESTAURANT_LAT = 6.8018;
 const RESTAURANT_LNG = 79.9227;
 
@@ -58,24 +57,85 @@ export default function AdminDashboard() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [promos, setPromos] = useState<PromoItem[]>([]);
   
-  // Delivery Channel Toggle States
+  // Delivery Toggles
   const [directDeliveryEnabled, setDirectDeliveryEnabled] = useState(true);
   const [ubereatsEnabled, setUbereatsEnabled] = useState(true);
   const [pickmeEnabled, setPickmeEnabled] = useState(true);
   const [settingsId, setSettingsId] = useState<string | null>(null);
 
-  // Add Item State
+  // Audio / Sound State
+  const [isRinging, setIsRinging] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Add/Edit Item States
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newPrice, setNewPrice] = useState('');
   const [newCategory, setNewCategory] = useState('rice');
   const [uploadingImage, setUploadingImage] = useState(false);
-
-  // Edit Item State
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
 
+  // 1. Initialize Local Alert Audio & Unlock Browser Audio Policy
+  useEffect(() => {
+    // Load local audio file placed in public/alert.mp3
+    audioRef.current = new Audio('/alert.mp3');
+    audioRef.current.loop = true;
+
+    // Unlock browser audio policy on first user click on the admin page
+    const unlockAudio = () => {
+      if (audioRef.current) {
+        audioRef.current.play().then(() => {
+          audioRef.current?.pause();
+          if (audioRef.current) audioRef.current.currentTime = 0;
+        }).catch(() => {});
+      }
+      window.removeEventListener('click', unlockAudio);
+    };
+
+    window.addEventListener('click', unlockAudio);
+    return () => {
+      window.removeEventListener('click', unlockAudio);
+    };
+  }, []);
+
+  const playRingtone = () => {
+    if (audioRef.current) {
+      audioRef.current.play().catch((err) => console.log('Autoplay waiting for initial page interaction:', err));
+      setIsRinging(true);
+    }
+  };
+
+  const stopRingtone = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setIsRinging(false);
+    }
+  };
+
+  // 2. Setup Supabase Realtime Listener for New Incoming Orders
   useEffect(() => {
     fetchAllData();
+
+    const channel = supabase
+      .channel('admin-orders-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'orders' },
+        (payload) => {
+          const newOrder = payload.new as Order;
+          setOrders((prevOrders) => [newOrder, ...prevOrders]);
+          
+          // Ring phone alert on new order arrival
+          playRingtone();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+      stopRingtone();
+    };
   }, []);
 
   async function fetchAllData() {
@@ -111,17 +171,7 @@ export default function AdminDashboard() {
 
   async function fetchSettings() {
     try {
-      const { data, error } = await supabase
-        .from('store_settings')
-        .select('*')
-        .limit(1)
-        .maybeSingle();
-
-      if (error) {
-        console.error('Settings Fetch Error:', error.message);
-        return;
-      }
-
+      const { data, error } = await supabase.from('store_settings').select('*').limit(1).maybeSingle();
       if (data) {
         setDirectDeliveryEnabled(data.direct_delivery_enabled ?? true);
         setUbereatsEnabled(data.ubereats_enabled ?? true);
@@ -129,11 +179,10 @@ export default function AdminDashboard() {
         setSettingsId(data.id);
       }
     } catch (err) {
-      console.error('Unexpected error fetching settings:', err);
+      console.error('Settings error:', err);
     }
   }
 
-  // Helper to build Google Maps Directions URL
   const getGoogleMapsDirectionsUrl = (order: Order) => {
     if (order.lat && order.lng) {
       return `https://www.google.com/maps/dir/?api=1&origin=${RESTAURANT_LAT},${RESTAURANT_LNG}&destination=${order.lat},${order.lng}&travelmode=driving`;
@@ -144,9 +193,8 @@ export default function AdminDashboard() {
     return '#';
   };
 
-  // --- ACTIONS ---
-
   async function markOrderCompleted(id: string) {
+    stopRingtone();
     const { error } = await supabase.from('orders').update({ status: 'completed' }).eq('id', id);
     if (!error) {
       setOrders(orders.map((o) => (o.id === id ? { ...o, status: 'completed' } : o)));
@@ -168,7 +216,6 @@ export default function AdminDashboard() {
     }
   }
 
-  // Delivery Channel Actions
   async function toggleDirectDelivery() {
     if (!settingsId) return;
     const newStatus = !directDeliveryEnabled;
@@ -190,7 +237,6 @@ export default function AdminDashboard() {
     if (!error) setPickmeEnabled(newStatus);
   }
 
-  // Image Upload Helper
   async function handleImageUpload(file: File): Promise<string | null> {
     setUploadingImage(true);
     const fileName = `${Date.now()}-${file.name}`;
@@ -206,7 +252,6 @@ export default function AdminDashboard() {
     return publicUrlData.publicUrl;
   }
 
-  // Save New Menu Item
   async function handleAddMenuItem(imageUrl: string) {
     if (!newTitle || !newPrice || !imageUrl) {
       alert('Please fill out all fields and select an image.');
@@ -232,7 +277,6 @@ export default function AdminDashboard() {
     }
   }
 
-  // Save Edits to Existing Menu Item
   async function handleSaveEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editingItem) return;
@@ -311,6 +355,26 @@ export default function AdminDashboard() {
 
       {/* Main Workspace */}
       <main className="flex-1 p-6 md:p-10 max-w-6xl">
+        
+        {/* Incoming Call Ringing Alert Bar (Active Across All Tabs) */}
+        {isRinging && (
+          <div className="mb-6 p-4 bg-red-600 animate-bounce rounded-2xl flex items-center justify-between shadow-2xl text-white">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl animate-spin">🔔</span>
+              <div>
+                <h3 className="font-black text-lg uppercase tracking-wider">NEW ORDER INCOMING!</h3>
+                <p className="text-xs text-white/90">A new customer order has been received in real-time.</p>
+              </div>
+            </div>
+            <button
+              onClick={stopRingtone}
+              className="px-6 py-2.5 bg-black text-amber-400 font-black text-xs uppercase rounded-xl hover:bg-gray-900 shadow-lg"
+            >
+              🔕 Accept & Stop Sound
+            </button>
+          </div>
+        )}
+
         {loading ? (
           <div className="text-center py-20 text-gray-400 text-sm">Loading Supabase Data...</div>
         ) : (
@@ -318,7 +382,14 @@ export default function AdminDashboard() {
             {/* 1. ORDERS TAB */}
             {activeTab === 'orders' && (
               <div className="space-y-6">
-                <h1 className="text-2xl font-black">Incoming Customer Orders</h1>
+                <div className="flex items-center justify-between">
+                  <h1 className="text-2xl font-black">Incoming Customer Orders</h1>
+                  <span className="text-xs text-green-400 font-bold flex items-center gap-2 bg-green-500/10 px-3 py-1.5 rounded-full border border-green-500/20">
+                    <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
+                    Live Realtime Active
+                  </span>
+                </div>
+
                 <div className="grid grid-cols-1 gap-4">
                   {orders.length === 0 ? (
                     <p className="text-gray-500 text-sm">No orders recorded yet.</p>
@@ -327,7 +398,6 @@ export default function AdminDashboard() {
                       <div key={order.id} className="bg-[#121212] border border-[#292929] rounded-2xl p-6 flex flex-col md:flex-row md:items-start justify-between gap-6">
                         <div className="space-y-3 flex-1">
                           
-                          {/* Order Code & Status */}
                           <div className="flex items-center gap-3">
                             <span className="font-black text-lg text-[#ffbd18]">#{order.order_code || 'ORD'}</span>
                             <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${order.status === 'pending' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-green-500/10 text-green-400 border border-green-500/20'}`}>
@@ -338,7 +408,6 @@ export default function AdminDashboard() {
                             </span>
                           </div>
 
-                          {/* Customer Info */}
                           <div>
                             <h3 className="text-lg font-bold text-white">{order.customer_name}</h3>
                             <a href={`tel:${order.phone}`} className="text-xs text-[#ffbd18] hover:underline font-semibold block mt-0.5">
@@ -346,7 +415,6 @@ export default function AdminDashboard() {
                             </a>
                           </div>
 
-                          {/* Delivery or Pickup Details */}
                           <div className="bg-[#070707] p-3.5 rounded-xl border border-[#1f1f1f] text-xs space-y-1">
                             {order.delivery_type === 'delivery' ? (
                               <>
@@ -357,11 +425,6 @@ export default function AdminDashboard() {
                                 <p className="text-gray-300 mt-1">
                                   <strong className="text-gray-400">Address:</strong> {order.address || 'N/A'}
                                 </p>
-                                {order.lat && order.lng && (
-                                  <p className="text-[11px] text-gray-500">
-                                    GPS Coordinates: {order.lat.toFixed(5)}, {order.lng.toFixed(5)}
-                                  </p>
-                                )}
                               </>
                             ) : (
                               <p className="font-bold text-amber-400">
@@ -370,14 +433,12 @@ export default function AdminDashboard() {
                             )}
                           </div>
 
-                          {/* Notes */}
                           {order.notes && (
                             <p className="text-xs text-amber-300 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20">
                               📝 <strong>Note:</strong> {order.notes}
                             </p>
                           )}
 
-                          {/* Ordered Food Items */}
                           <div className="bg-[#070707] p-3.5 rounded-xl border border-[#1f1f1f] text-xs space-y-1.5">
                             <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Items Ordered:</p>
                             {order.items?.map((item, idx) => (
@@ -388,7 +449,6 @@ export default function AdminDashboard() {
                             ))}
                           </div>
 
-                          {/* Total Price Breakdown */}
                           <div className="pt-2 flex items-center justify-between text-sm border-t border-[#222]">
                             <span className="text-xs text-gray-400 font-bold uppercase">Total Charged:</span>
                             <span className="text-lg font-black text-[#ffbd18]">LKR {order.total_price}</span>
@@ -396,9 +456,7 @@ export default function AdminDashboard() {
 
                         </div>
 
-                        {/* Action Buttons Column */}
                         <div className="flex flex-col gap-2 min-w-[200px]">
-                          {/* Google Maps Navigation Button (Only for Delivery) */}
                           {order.delivery_type === 'delivery' && (
                             <a
                               href={getGoogleMapsDirectionsUrl(order)}
@@ -411,7 +469,6 @@ export default function AdminDashboard() {
                             </a>
                           )}
 
-                          {/* Complete Order Button */}
                           {order.status === 'pending' && (
                             <button
                               onClick={() => markOrderCompleted(order.id)}
@@ -435,7 +492,6 @@ export default function AdminDashboard() {
               <div className="space-y-6">
                 <h1 className="text-2xl font-black">Menu Items Management</h1>
 
-                {/* Add New Dish Form */}
                 <form
                   onSubmit={async (e) => {
                     e.preventDefault();
@@ -470,7 +526,6 @@ export default function AdminDashboard() {
                   </div>
                 </form>
 
-                {/* Items List */}
                 <div className="space-y-4">
                   {menuItems.map((item) => (
                     <div key={item.id} className="bg-[#121212] border border-[#292929] rounded-2xl p-4 flex items-center justify-between gap-4">
@@ -547,7 +602,6 @@ export default function AdminDashboard() {
                 <h1 className="text-2xl font-black">Ordering Channel Controls</h1>
                 <div className="bg-[#121212] border border-[#292929] rounded-2xl p-6 space-y-6">
                   
-                  {/* Direct Delivery Toggle */}
                   <div className="flex items-center justify-between pb-4 border-b border-[#222222]">
                     <div>
                       <h3 className="text-base font-bold text-white">DinuTharu Direct Delivery</h3>
@@ -563,7 +617,6 @@ export default function AdminDashboard() {
                     </button>
                   </div>
 
-                  {/* Uber Eats Toggle */}
                   <div className="flex items-center justify-between pb-4 border-b border-[#222222]">
                     <div>
                       <h3 className="text-base font-bold text-white">Uber Eats Redirect</h3>
@@ -579,7 +632,6 @@ export default function AdminDashboard() {
                     </button>
                   </div>
 
-                  {/* PickMe Toggle */}
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-base font-bold text-white">PickMe Food Redirect</h3>
