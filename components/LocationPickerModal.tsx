@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -23,24 +23,80 @@ interface LocationPickerProps {
   onConfirmLocation: (distanceKm: number, lat: number, lng: number) => void;
 }
 
-// Map Click Listener Component
-function MapEvents({ onLocationSelect }: { onLocationSelect: (lat: number, lng: number) => void }) {
-  useMapEvents({
-    click(e) {
+// Map Component that automatically zooms/pans to fit both pins and the road path
+function MapController({
+  userLat,
+  userLng,
+  routeCoords,
+  onLocationSelect,
+}: {
+  userLat: number | null;
+  userLng: number | null;
+  routeCoords: [number, number][];
+  onLocationSelect: (lat: number, lng: number) => void;
+}) {
+  const map = useMap();
+
+  // Attach click listener for manually dropping a pin
+  useEffect(() => {
+    const handleMapClick = (e: L.LeafletMouseEvent) => {
       onLocationSelect(e.latlng.lat, e.latlng.lng);
-    },
-  });
+    };
+
+    map.on('click', handleMapClick);
+    return () => {
+      map.off('click', handleMapClick);
+    };
+  }, [map, onLocationSelect]);
+
+  // Adjust camera bounds whenever user pin or route line updates
+  useEffect(() => {
+    if (userLat !== null && userLng !== null) {
+      const bounds = L.latLngBounds([
+        RESTAURANT_COORDS,
+        [userLat, userLng],
+      ]);
+
+      // Expand bounds if route coordinates exist
+      routeCoords.forEach((coord) => bounds.extend(coord));
+
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+    }
+  }, [map, userLat, userLng, routeCoords]);
+
   return null;
 }
 
 export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation }: LocationPickerProps) {
   const [selectedLat, setSelectedLat] = useState<number | null>(null);
   const [selectedLng, setSelectedLng] = useState<number | null>(null);
+  const [routePolyline, setRoutePolyline] = useState<[number, number][]>([]);
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [loadingDistance, setLoadingDistance] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Calculate road distance whenever lat or lng changes (using primitive dependency values)
+  // Trigger GPS detection immediately every time the modal is opened
+  useEffect(() => {
+    if (isOpen) {
+      if (typeof window !== 'undefined' && navigator.geolocation) {
+        setLoadingDistance(true);
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            setSelectedLat(pos.coords.latitude);
+            setSelectedLng(pos.coords.longitude);
+          },
+          (err) => {
+            console.warn('Geolocation warning/error:', err.message);
+            setLoadingDistance(false);
+            setErrorMsg('Could not detect GPS location automatically. Please click on the map to set your pin.');
+          },
+          { enableHighAccuracy: true, timeout: 8000 }
+        );
+      }
+    }
+  }, [isOpen]);
+
+  // Calculate road distance & fetch geometry path from OSRM whenever coordinates update
   useEffect(() => {
     if (selectedLat === null || selectedLng === null) return;
 
@@ -50,7 +106,7 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
 
       try {
         const response = await fetch(
-          `https://router.project-osrm.org/route/v1/driving/${RESTAURANT_COORDS[1]},${RESTAURANT_COORDS[0]};${selectedLng},${selectedLat}?overview=false`
+          `https://router.project-osrm.org/route/v1/driving/${RESTAURANT_COORDS[1]},${RESTAURANT_COORDS[0]};${selectedLng},${selectedLat}?overview=full&geometries=geojson`
         );
         const data = await response.json();
 
@@ -59,8 +115,13 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
           const km = meters / 1000;
           setDistanceKm(km);
 
+          const geojsonCoords: [number, number][] = data.routes[0].geometry.coordinates.map(
+            (coord: [number, number]) => [coord[1], coord[0]]
+          );
+          setRoutePolyline(geojsonCoords);
+
           if (km > 5) {
-            setErrorMsg(`Selected location is ${km.toFixed(1)} km away. We only deliver within 5 km!`);
+            setErrorMsg(`Selected location is ${km.toFixed(1)} km away via road. We only deliver within 5 km!`);
           }
         } else {
           setErrorMsg('Could not calculate driving distance.');
@@ -84,14 +145,17 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
       return;
     }
 
+    setLoadingDistance(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setSelectedLat(pos.coords.latitude);
         setSelectedLng(pos.coords.longitude);
       },
       () => {
+        setLoadingDistance(false);
         alert('Unable to retrieve your location. Please drop a pin manually on the map.');
-      }
+      },
+      { enableHighAccuracy: true }
     );
   };
 
@@ -112,8 +176,8 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#222] pb-3">
           <div>
-            <h3 className="text-lg font-extrabold text-[#ffbd18]">Select Delivery Pin</h3>
-            <p className="text-xs text-gray-400">Click on the map or use GPS to set your location</p>
+            <h3 className="text-lg font-extrabold text-[#ffbd18]">Delivery Location & Road Route</h3>
+            <p className="text-xs text-gray-400">Click anywhere on the map to manually set or adjust your delivery pin</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-white text-sm">✕</button>
         </div>
@@ -124,11 +188,11 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
           onClick={handleUseCurrentGPS}
           className="w-full py-2.5 bg-[#181818] border border-[#333] hover:border-[#ffbd18] text-xs font-bold uppercase rounded-xl transition-all text-[#ffbd18] flex items-center justify-center gap-2"
         >
-          <span>🎯</span> Use Current GPS Location
+          <span>🎯</span> Re-detect GPS Location
         </button>
 
         {/* Leaflet Map Canvas */}
-        <div className="h-72 w-full rounded-xl overflow-hidden border border-[#222]">
+        <div className="h-80 w-full rounded-xl overflow-hidden border border-[#222] relative">
           <MapContainer
             center={RESTAURANT_COORDS}
             zoom={13}
@@ -138,34 +202,46 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
+
             {/* Restaurant Fixed Pin */}
             <Marker position={RESTAURANT_COORDS} icon={customIcon} />
 
-            {/* Selected User Pin */}
+            {/* User Selected Delivery Pin */}
             {selectedLat !== null && selectedLng !== null && (
               <Marker position={[selectedLat, selectedLng]} icon={customIcon} />
             )}
 
-            <MapEvents onLocationSelect={(lat, lng) => {
-              setSelectedLat(lat);
-              setSelectedLng(lng);
-            }} />
+            {/* Road Path Highlight Line */}
+            {routePolyline.length > 0 && (
+              <Polyline positions={routePolyline} color="#ffbd18" weight={5} opacity={0.8} />
+            )}
+
+            {/* Camera View Bounds Controller */}
+            <MapController
+              userLat={selectedLat}
+              userLng={selectedLng}
+              routeCoords={routePolyline}
+              onLocationSelect={(lat, lng) => {
+                setSelectedLat(lat);
+                setSelectedLng(lng);
+              }}
+            />
           </MapContainer>
         </div>
 
         {/* Distance Info & Validation Bar */}
-        {loadingDistance && <p className="text-xs text-gray-400 animate-pulse">Calculating driving distance...</p>}
+        {loadingDistance && <p className="text-xs text-gray-400 animate-pulse">Detecting location & calculating driving route...</p>}
 
         {distanceKm !== null && !loadingDistance && (
           <div className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between ${
             distanceKm <= 5 ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400'
           }`}>
-            <span>Distance: {distanceKm.toFixed(1)} km</span>
+            <span>Road Distance: {distanceKm.toFixed(1)} km</span>
             <span>{distanceKm <= 5 ? `Est. Delivery Fee: LKR ${Math.ceil(distanceKm) * 100}` : 'Out of delivery range'}</span>
           </div>
         )}
 
-        {errorMsg && <p className="text-xs text-red-400 font-semibold">{errorMsg}</p>}
+        {errorMsg && !loadingDistance && <p className="text-xs text-red-400 font-semibold">{errorMsg}</p>}
 
         {/* Action Buttons */}
         <div className="flex items-center justify-end gap-3 pt-2">

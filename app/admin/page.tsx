@@ -33,15 +33,24 @@ interface Order {
   phone: string;
   delivery_type: 'delivery' | 'pickup';
   address?: string;
+  pickup_time?: string;
+  distance_km?: number;
+  delivery_fee?: number;
+  lat?: number;
+  lng?: number;
   notes?: string;
-  items: Array<{ title: string; quantity: number; price: number }>;
+  items: Array<{ title?: string; name?: string; quantity: number; price: number }>;
   total_price: number;
   status: 'pending' | 'completed' | 'cancelled';
   created_at: string;
 }
 
+// Restaurant Coordinates for Google Maps Navigation Origin (Bokundara / Piliyandala)
+const RESTAURANT_LAT = 6.8018;
+const RESTAURANT_LNG = 79.9227;
+
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'promos' | 'settings'>('menu');
+  const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'promos' | 'settings'>('orders');
   const [loading, setLoading] = useState(true);
 
   // Database States
@@ -123,6 +132,17 @@ export default function AdminDashboard() {
       console.error('Unexpected error fetching settings:', err);
     }
   }
+
+  // Helper to build Google Maps Directions URL
+  const getGoogleMapsDirectionsUrl = (order: Order) => {
+    if (order.lat && order.lng) {
+      return `https://www.google.com/maps/dir/?api=1&origin=${RESTAURANT_LAT},${RESTAURANT_LNG}&destination=${order.lat},${order.lng}&travelmode=driving`;
+    }
+    if (order.address) {
+      return `https://www.google.com/maps/dir/?api=1&origin=${RESTAURANT_LAT},${RESTAURANT_LNG}&destination=${encodeURIComponent(order.address)}&travelmode=driving`;
+    }
+    return '#';
+  };
 
   // --- ACTIONS ---
 
@@ -304,28 +324,105 @@ export default function AdminDashboard() {
                     <p className="text-gray-500 text-sm">No orders recorded yet.</p>
                   ) : (
                     orders.map((order) => (
-                      <div key={order.id} className="bg-[#121212] border border-[#292929] rounded-2xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div>
+                      <div key={order.id} className="bg-[#121212] border border-[#292929] rounded-2xl p-6 flex flex-col md:flex-row md:items-start justify-between gap-6">
+                        <div className="space-y-3 flex-1">
+                          
+                          {/* Order Code & Status */}
                           <div className="flex items-center gap-3">
-                            <span className="font-extrabold text-[#ffbd18]">#{order.order_code || 'ORD'}</span>
+                            <span className="font-black text-lg text-[#ffbd18]">#{order.order_code || 'ORD'}</span>
                             <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${order.status === 'pending' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-green-500/10 text-green-400 border border-green-500/20'}`}>
                               {order.status}
                             </span>
+                            <span className="text-[11px] text-gray-500">
+                              {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
                           </div>
-                          <h3 className="text-lg font-bold text-white mt-2">{order.customer_name} ({order.phone})</h3>
-                          <p className="text-xs text-gray-400 mt-1">Type: {order.delivery_type === 'delivery' ? `🛵 Delivery to ${order.address}` : '🏪 Pickup'}</p>
-                          <div className="mt-3 text-xs text-gray-300 space-y-1">
-                            {order.items?.map((i, idx) => (
-                              <p key={idx}>• {i.quantity}x {i.title}</p>
+
+                          {/* Customer Info */}
+                          <div>
+                            <h3 className="text-lg font-bold text-white">{order.customer_name}</h3>
+                            <a href={`tel:${order.phone}`} className="text-xs text-[#ffbd18] hover:underline font-semibold block mt-0.5">
+                              📞 {order.phone}
+                            </a>
+                          </div>
+
+                          {/* Delivery or Pickup Details */}
+                          <div className="bg-[#070707] p-3.5 rounded-xl border border-[#1f1f1f] text-xs space-y-1">
+                            {order.delivery_type === 'delivery' ? (
+                              <>
+                                <p className="font-bold text-green-400 flex items-center gap-1.5">
+                                  <span>🛵 Home Delivery</span>
+                                  <span className="text-gray-400 font-normal">({order.distance_km || 0} km away)</span>
+                                </p>
+                                <p className="text-gray-300 mt-1">
+                                  <strong className="text-gray-400">Address:</strong> {order.address || 'N/A'}
+                                </p>
+                                {order.lat && order.lng && (
+                                  <p className="text-[11px] text-gray-500">
+                                    GPS Coordinates: {order.lat.toFixed(5)}, {order.lng.toFixed(5)}
+                                  </p>
+                                )}
+                              </>
+                            ) : (
+                              <p className="font-bold text-amber-400">
+                                🏪 Store Pickup scheduled at: <span className="text-white font-extrabold">{order.pickup_time || 'Not specified'}</span>
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Notes */}
+                          {order.notes && (
+                            <p className="text-xs text-amber-300 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20">
+                              📝 <strong>Note:</strong> {order.notes}
+                            </p>
+                          )}
+
+                          {/* Ordered Food Items */}
+                          <div className="bg-[#070707] p-3.5 rounded-xl border border-[#1f1f1f] text-xs space-y-1.5">
+                            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Items Ordered:</p>
+                            {order.items?.map((item, idx) => (
+                              <div key={idx} className="flex justify-between items-center">
+                                <span className="text-white font-medium">• {item.quantity}x {item.title || item.name}</span>
+                                <span className="text-gray-400">LKR {item.price * item.quantity}</span>
+                              </div>
                             ))}
                           </div>
-                          <p className="text-sm font-extrabold text-[#ffbd18] mt-3">Total: LKR {order.total_price}</p>
+
+                          {/* Total Price Breakdown */}
+                          <div className="pt-2 flex items-center justify-between text-sm border-t border-[#222]">
+                            <span className="text-xs text-gray-400 font-bold uppercase">Total Charged:</span>
+                            <span className="text-lg font-black text-[#ffbd18]">LKR {order.total_price}</span>
+                          </div>
+
                         </div>
-                        {order.status === 'pending' && (
-                          <button onClick={() => markOrderCompleted(order.id)} className="px-6 py-3 bg-[#20c45a] hover:bg-[#1bb050] text-white font-black text-xs uppercase rounded-xl transition-all shadow-lg">
-                            ✓ Complete Order
-                          </button>
-                        )}
+
+                        {/* Action Buttons Column */}
+                        <div className="flex flex-col gap-2 min-w-[200px]">
+                          {/* Google Maps Navigation Button (Only for Delivery) */}
+                          {order.delivery_type === 'delivery' && (
+                            <a
+                              href={getGoogleMapsDirectionsUrl(order)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-full py-3 px-4 bg-[#181818] border border-[#292929] hover:border-green-500 text-green-400 hover:text-white text-xs font-bold uppercase rounded-xl transition-all flex items-center justify-center gap-2 shadow-md"
+                            >
+                              <span>📍</span>
+                              <span>Open in Google Maps</span>
+                            </a>
+                          )}
+
+                          {/* Complete Order Button */}
+                          {order.status === 'pending' && (
+                            <button
+                              onClick={() => markOrderCompleted(order.id)}
+                              className="w-full py-3 px-4 bg-[#20c45a] hover:bg-[#1bb050] text-white font-black text-xs uppercase rounded-xl transition-all shadow-lg flex items-center justify-center gap-1.5"
+                            >
+                              <span>✓</span>
+                              <span>Complete Order</span>
+                            </button>
+                          )}
+                        </div>
+
                       </div>
                     ))
                   )}
