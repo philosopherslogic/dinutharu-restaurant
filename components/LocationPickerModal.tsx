@@ -57,9 +57,7 @@ function MapController({
         [userLat, userLng],
       ]);
 
-      // Expand bounds if route coordinates exist
       routeCoords.forEach((coord) => bounds.extend(coord));
-
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
     }
   }, [map, userLat, userLng, routeCoords]);
@@ -73,30 +71,56 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
   const [routePolyline, setRoutePolyline] = useState<[number, number][]>([]);
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [loadingDistance, setLoadingDistance] = useState(false);
+  
+  // Status & Guidance State
+  const [permissionNotice, setPermissionNotice] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Trigger GPS detection immediately every time the modal is opened
+  // Function to request GPS location with explicit error handling
+  const requestGPSLocation = () => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      setPermissionNotice('⚠️ Geolocation is not supported by your browser. Please tap on the map to set your delivery location manually.');
+      return;
+    }
+
+    setLoadingDistance(true);
+    setPermissionNotice(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setSelectedLat(pos.coords.latitude);
+        setSelectedLng(pos.coords.longitude);
+        setPermissionNotice(null);
+      },
+      (err) => {
+        setLoadingDistance(false);
+        switch (err.code) {
+          case err.PERMISSION_DENIED:
+            setPermissionNotice('🔒 Location permission denied. Please allow location access in your browser settings, or tap on the map to select your pin manually.');
+            break;
+          case err.POSITION_UNAVAILABLE:
+            setPermissionNotice('📡 GPS/Location is turned off on your device. Please turn on Location/GPS on your phone and try again, or manually pick your pin on the map.');
+            break;
+          case err.TIMEOUT:
+            setPermissionNotice('⏱️ GPS request timed out. Please tap directly on the map to select your location manually.');
+            break;
+          default:
+            setPermissionNotice('⚠️ Unable to detect GPS location. Please click or tap on the map to manually pick your delivery pin.');
+            break;
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
+  // Trigger GPS detection immediately when modal opens
   useEffect(() => {
     if (isOpen) {
-      if (typeof window !== 'undefined' && navigator.geolocation) {
-        setLoadingDistance(true);
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            setSelectedLat(pos.coords.latitude);
-            setSelectedLng(pos.coords.longitude);
-          },
-          (err) => {
-            console.warn('Geolocation warning/error:', err.message);
-            setLoadingDistance(false);
-            setErrorMsg('Could not detect GPS location automatically. Please click on the map to set your pin.');
-          },
-          { enableHighAccuracy: true, timeout: 8000 }
-        );
-      }
+      requestGPSLocation();
     }
   }, [isOpen]);
 
-  // Calculate road distance & fetch geometry path from OSRM whenever coordinates update
+  // Calculate road distance & fetch route geometry from OSRM whenever coordinates change
   useEffect(() => {
     if (selectedLat === null || selectedLng === null) return;
 
@@ -124,11 +148,11 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
             setErrorMsg(`Selected location is ${km.toFixed(1)} km away via road. We only deliver within 5 km!`);
           }
         } else {
-          setErrorMsg('Could not calculate driving distance.');
+          setErrorMsg('Could not calculate driving distance. Please tap another pin position on the map.');
         }
       } catch (err) {
         console.error('OSRM API Error:', err);
-        setErrorMsg('Failed to calculate route distance.');
+        setErrorMsg('Failed to calculate road route. Please tap manually on the map to select location.');
       } finally {
         setLoadingDistance(false);
       }
@@ -138,26 +162,6 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
   }, [selectedLat, selectedLng]);
 
   if (!isOpen) return null;
-
-  const handleUseCurrentGPS = () => {
-    if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser.');
-      return;
-    }
-
-    setLoadingDistance(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setSelectedLat(pos.coords.latitude);
-        setSelectedLng(pos.coords.longitude);
-      },
-      () => {
-        setLoadingDistance(false);
-        alert('Unable to retrieve your location. Please drop a pin manually on the map.');
-      },
-      { enableHighAccuracy: true }
-    );
-  };
 
   const handleConfirm = () => {
     if (selectedLat === null || selectedLng === null || distanceKm === null) return;
@@ -176,19 +180,32 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#222] pb-3">
           <div>
-            <h3 className="text-lg font-extrabold text-[#ffbd18]">Delivery Location & Road Route</h3>
-            <p className="text-xs text-gray-400">Click anywhere on the map to manually set or adjust your delivery pin</p>
+            <h3 className="text-lg font-extrabold text-[#ffbd18]">Delivery Location & Map Route</h3>
+            <p className="text-xs text-gray-400">Allow location access or tap on the map to set your pin</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-white text-sm">✕</button>
         </div>
 
+        {/* Dynamic Permission & Guidance Banner */}
+        {permissionNotice && (
+          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400 text-xs flex items-center justify-between gap-2">
+            <span>{permissionNotice}</span>
+            <button
+              onClick={requestGPSLocation}
+              className="px-3 py-1 bg-[#ffbd18] text-[#070707] font-extrabold rounded-lg hover:bg-[#e0a410] flex-shrink-0 text-[11px]"
+            >
+              Retry GPS
+            </button>
+          </div>
+        )}
+
         {/* GPS Button */}
         <button
           type="button"
-          onClick={handleUseCurrentGPS}
+          onClick={requestGPSLocation}
           className="w-full py-2.5 bg-[#181818] border border-[#333] hover:border-[#ffbd18] text-xs font-bold uppercase rounded-xl transition-all text-[#ffbd18] flex items-center justify-center gap-2"
         >
-          <span>🎯</span> Re-detect GPS Location
+          <span>🎯</span> Detect My Current GPS Location
         </button>
 
         {/* Leaflet Map Canvas */}
@@ -203,7 +220,7 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
 
-            {/* Restaurant Fixed Pin */}
+            {/* Restaurant Pin */}
             <Marker position={RESTAURANT_COORDS} icon={customIcon} />
 
             {/* User Selected Delivery Pin */}
@@ -224,13 +241,14 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
               onLocationSelect={(lat, lng) => {
                 setSelectedLat(lat);
                 setSelectedLng(lng);
+                setPermissionNotice(null);
               }}
             />
           </MapContainer>
         </div>
 
         {/* Distance Info & Validation Bar */}
-        {loadingDistance && <p className="text-xs text-gray-400 animate-pulse">Detecting location & calculating driving route...</p>}
+        {loadingDistance && <p className="text-xs text-gray-400 animate-pulse">Checking GPS & calculating road route...</p>}
 
         {distanceKm !== null && !loadingDistance && (
           <div className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between ${
