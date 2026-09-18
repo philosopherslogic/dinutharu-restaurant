@@ -14,4 +14,7 @@ export interface MenuItem {
 // Extends MenuItem so it inherits all fields, plus adds a 'quantity' field
 export interface CartItem extends MenuItem {
   quantity: number;
+  image_url?: string;
+
 }
+

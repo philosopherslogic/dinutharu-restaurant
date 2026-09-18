@@ -48,7 +48,11 @@ export default function AdminDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [promos, setPromos] = useState<PromoItem[]>([]);
+  
+  // Delivery Channel Toggle States
   const [directDeliveryEnabled, setDirectDeliveryEnabled] = useState(true);
+  const [ubereatsEnabled, setUbereatsEnabled] = useState(true);
+  const [pickmeEnabled, setPickmeEnabled] = useState(true);
   const [settingsId, setSettingsId] = useState<string | null>(null);
 
   // Add Item State
@@ -67,8 +71,18 @@ export default function AdminDashboard() {
 
   async function fetchAllData() {
     setLoading(true);
-    await Promise.all([fetchOrders(), fetchMenu(), fetchPromos(), fetchSettings()]);
-    setLoading(false);
+    try {
+      await Promise.all([
+        fetchOrders(),
+        fetchMenu(),
+        fetchPromos(),
+        fetchSettings(),
+      ]);
+    } catch (error) {
+      console.error('Data fetching error:', error);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function fetchOrders() {
@@ -87,10 +101,26 @@ export default function AdminDashboard() {
   }
 
   async function fetchSettings() {
-    const { data } = await supabase.from('store_settings').select('*').limit(1).single();
-    if (data) {
-      setDirectDeliveryEnabled(data.direct_delivery_enabled);
-      setSettingsId(data.id);
+    try {
+      const { data, error } = await supabase
+        .from('store_settings')
+        .select('*')
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Settings Fetch Error:', error.message);
+        return;
+      }
+
+      if (data) {
+        setDirectDeliveryEnabled(data.direct_delivery_enabled ?? true);
+        setUbereatsEnabled(data.ubereats_enabled ?? true);
+        setPickmeEnabled(data.pickme_enabled ?? true);
+        setSettingsId(data.id);
+      }
+    } catch (err) {
+      console.error('Unexpected error fetching settings:', err);
     }
   }
 
@@ -118,11 +148,26 @@ export default function AdminDashboard() {
     }
   }
 
+  // Delivery Channel Actions
   async function toggleDirectDelivery() {
     if (!settingsId) return;
     const newStatus = !directDeliveryEnabled;
     const { error } = await supabase.from('store_settings').update({ direct_delivery_enabled: newStatus }).eq('id', settingsId);
     if (!error) setDirectDeliveryEnabled(newStatus);
+  }
+
+  async function toggleUberEats() {
+    if (!settingsId) return;
+    const newStatus = !ubereatsEnabled;
+    const { error } = await supabase.from('store_settings').update({ ubereats_enabled: newStatus }).eq('id', settingsId);
+    if (!error) setUbereatsEnabled(newStatus);
+  }
+
+  async function togglePickMe() {
+    if (!settingsId) return;
+    const newStatus = !pickmeEnabled;
+    const { error } = await supabase.from('store_settings').update({ pickme_enabled: newStatus }).eq('id', settingsId);
+    if (!error) setPickmeEnabled(newStatus);
   }
 
   // Image Upload Helper
@@ -199,7 +244,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-[#070707] text-white flex flex-col md:flex-row">
-      {/* Sidebar */}
+      {/* Sidebar Navigation */}
       <aside className="w-full md:w-64 bg-[#121212] border-r border-[#222222] p-6 flex flex-col justify-between">
         <div>
           <h2 className="text-xl font-extrabold tracking-wider text-[#ffbd18]">DinuTharu Admin</h2>
@@ -234,7 +279,7 @@ export default function AdminDashboard() {
                 activeTab === 'settings' ? 'bg-[#ffbd18] text-[#070707]' : 'text-gray-400 hover:bg-[#1f1f1f]'
               }`}
             >
-              ⚙️ Direct Delivery Toggle
+              ⚙️ Delivery Toggles
             </button>
           </nav>
         </div>
@@ -244,7 +289,7 @@ export default function AdminDashboard() {
         </Link>
       </aside>
 
-      {/* Main Content Workspace */}
+      {/* Main Workspace */}
       <main className="flex-1 p-6 md:p-10 max-w-6xl">
         {loading ? (
           <div className="text-center py-20 text-gray-400 text-sm">Loading Supabase Data...</div>
@@ -402,20 +447,57 @@ export default function AdminDashboard() {
             {/* 4. SETTINGS TAB */}
             {activeTab === 'settings' && (
               <div className="space-y-6">
-                <h1 className="text-2xl font-black">System Controls</h1>
-                <div className="bg-[#121212] border border-[#292929] rounded-2xl p-6 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-bold">Direct Delivery Checkout</h3>
-                    <p className="text-xs text-gray-400 mt-1">Enable or disable direct customer checkout on site.</p>
+                <h1 className="text-2xl font-black">Ordering Channel Controls</h1>
+                <div className="bg-[#121212] border border-[#292929] rounded-2xl p-6 space-y-6">
+                  
+                  {/* Direct Delivery Toggle */}
+                  <div className="flex items-center justify-between pb-4 border-b border-[#222222]">
+                    <div>
+                      <h3 className="text-base font-bold text-white">DinuTharu Direct Delivery</h3>
+                      <p className="text-xs text-gray-400 mt-1">Enable or disable direct website delivery checkout.</p>
+                    </div>
+                    <button
+                      onClick={toggleDirectDelivery}
+                      className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${
+                        directDeliveryEnabled ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'bg-[#e52a20] text-white shadow-lg shadow-red-500/20'
+                      }`}
+                    >
+                      {directDeliveryEnabled ? 'ENABLED' : 'DISABLED'}
+                    </button>
                   </div>
-                  <button
-                    onClick={toggleDirectDelivery}
-                    className={`px-6 py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${
-                      directDeliveryEnabled ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'bg-[#e52a20] text-white shadow-lg shadow-red-500/20'
-                    }`}
-                  >
-                    {directDeliveryEnabled ? 'ENABLED' : 'DISABLED'}
-                  </button>
+
+                  {/* Uber Eats Toggle */}
+                  <div className="flex items-center justify-between pb-4 border-b border-[#222222]">
+                    <div>
+                      <h3 className="text-base font-bold text-white">Uber Eats Redirect</h3>
+                      <p className="text-xs text-gray-400 mt-1">Show or hide Uber Eats order button on the site.</p>
+                    </div>
+                    <button
+                      onClick={toggleUberEats}
+                      className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${
+                        ubereatsEnabled ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'bg-[#e52a20] text-white shadow-lg shadow-red-500/20'
+                      }`}
+                    >
+                      {ubereatsEnabled ? 'ENABLED' : 'DISABLED'}
+                    </button>
+                  </div>
+
+                  {/* PickMe Toggle */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-white">PickMe Food Redirect</h3>
+                      <p className="text-xs text-gray-400 mt-1">Show or hide PickMe Food order button on the site.</p>
+                    </div>
+                    <button
+                      onClick={togglePickMe}
+                      className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${
+                        pickmeEnabled ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'bg-[#e52a20] text-white shadow-lg shadow-red-500/20'
+                      }`}
+                    >
+                      {pickmeEnabled ? 'ENABLED' : 'DISABLED'}
+                    </button>
+                  </div>
+
                 </div>
               </div>
             )}

@@ -12,8 +12,14 @@ export default function OrderModal() {
   const orderId = searchParams.get('order');
 
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
+  
+  // Store Channel Toggle States
   const [directDeliveryEnabled, setDirectDeliveryEnabled] = useState(true);
-  const [showClosedNotice, setShowClosedNotice] = useState(false);
+  const [ubereatsEnabled, setUbereatsEnabled] = useState(true);
+  const [pickmeEnabled, setPickmeEnabled] = useState(true);
+
+  // Closed Notice States
+  const [closedNoticeMessage, setClosedNoticeMessage] = useState<string | null>(null);
 
   const addToCart = useCartStore((state) => state.addToCart);
 
@@ -45,16 +51,27 @@ export default function OrderModal() {
       }
     }
 
-    // 2. Fetch Live Store Direct Delivery Settings
+    // 2. Fetch Live Store Channel Settings
     async function fetchStoreSettings() {
-      const { data } = await supabase
-        .from('store_settings')
-        .select('direct_delivery_enabled')
-        .limit(1)
-        .single();
+      try {
+        const { data, error } = await supabase
+          .from('store_settings')
+          .select('direct_delivery_enabled, ubereats_enabled, pickme_enabled')
+          .limit(1)
+          .maybeSingle();
 
-      if (data) {
-        setDirectDeliveryEnabled(data.direct_delivery_enabled);
+        if (error) {
+          console.error('Error fetching channel settings:', error.message);
+          return;
+        }
+
+        if (data) {
+          setDirectDeliveryEnabled(data.direct_delivery_enabled ?? true);
+          setUbereatsEnabled(data.ubereats_enabled ?? true);
+          setPickmeEnabled(data.pickme_enabled ?? true);
+        }
+      } catch (err) {
+        console.error('Unexpected settings error:', err);
       }
     }
 
@@ -69,18 +86,26 @@ export default function OrderModal() {
   };
 
   const handleUberEats = () => {
+    if (!ubereatsEnabled) {
+      setClosedNoticeMessage('⚠️ Uber Eats orders are currently disabled by the store.');
+      return;
+    }
     window.open('https://www.ubereats.com/', '_blank');
     handleClose();
   };
 
   const handlePickMe = () => {
+    if (!pickmeEnabled) {
+      setClosedNoticeMessage('⚠️ PickMe Food orders are currently disabled by the store.');
+      return;
+    }
     window.open('https://pickme.lk/', '_blank');
     handleClose();
   };
 
   const handleDirectOrder = () => {
     if (!directDeliveryEnabled) {
-      setShowClosedNotice(true);
+      setClosedNoticeMessage('⚠️ Direct Delivery is unavailable right now. Please select an available method!');
       return;
     }
     addToCart(selectedItem);
@@ -107,12 +132,12 @@ export default function OrderModal() {
           Select how you would like to complete your order:
         </p>
 
-        {/* Closed Notice Banner */}
-        {showClosedNotice && (
+        {/* Disabled Notice Banner */}
+        {closedNoticeMessage && (
           <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs flex items-center justify-between">
-            <span>⚠️ Direct Delivery is unavailable right now. Please order via Uber Eats or PickMe!</span>
+            <span>{closedNoticeMessage}</span>
             <button
-              onClick={() => setShowClosedNotice(false)}
+              onClick={() => setClosedNoticeMessage(null)}
               className="text-white font-bold text-sm ml-2"
             >
               ✕
@@ -121,38 +146,82 @@ export default function OrderModal() {
         )}
 
         <div className="space-y-3 mt-6">
-          {/* Uber Eats */}
+          {/* Uber Eats Option */}
           <button
             onClick={handleUberEats}
-            className="w-full p-4 bg-[#181818] border border-[#292929] hover:border-green-500/50 rounded-xl flex items-center justify-between group transition-all"
+            className={`w-full p-4 rounded-xl flex items-center justify-between transition-all ${
+              ubereatsEnabled
+                ? 'bg-[#181818] border border-[#292929] hover:border-green-500/50 group'
+                : 'bg-gray-900/50 border border-gray-800 opacity-50 cursor-not-allowed'
+            }`}
           >
             <div className="flex items-center gap-3">
               <span className="text-2xl">🟢</span>
               <div className="text-left">
-                <p className="font-bold text-sm text-white group-hover:text-green-400">
+                <p
+                  className={`font-bold text-sm ${
+                    ubereatsEnabled
+                      ? 'text-white group-hover:text-green-400'
+                      : 'text-gray-500 line-through'
+                  }`}
+                >
                   Order on Uber Eats
                 </p>
-                <p className="text-[11px] text-gray-400">Delivered via Uber driver</p>
+                <p
+                  className={`text-[11px] ${
+                    ubereatsEnabled ? 'text-gray-400' : 'text-red-400 font-semibold'
+                  }`}
+                >
+                  {ubereatsEnabled ? 'Delivered via Uber driver' : 'Currently Unavailable'}
+                </p>
               </div>
             </div>
-            <span className="text-xs text-gray-500 group-hover:text-white">↗</span>
+            <span
+              className={`text-xs ${
+                ubereatsEnabled ? 'text-gray-500 group-hover:text-white' : 'text-gray-600'
+              }`}
+            >
+              {ubereatsEnabled ? '↗' : 'Disabled'}
+            </span>
           </button>
 
-          {/* PickMe */}
+          {/* PickMe Option */}
           <button
             onClick={handlePickMe}
-            className="w-full p-4 bg-[#181818] border border-[#292929] hover:border-yellow-500/50 rounded-xl flex items-center justify-between group transition-all"
+            className={`w-full p-4 rounded-xl flex items-center justify-between transition-all ${
+              pickmeEnabled
+                ? 'bg-[#181818] border border-[#292929] hover:border-yellow-500/50 group'
+                : 'bg-gray-900/50 border border-gray-800 opacity-50 cursor-not-allowed'
+            }`}
           >
             <div className="flex items-center gap-3">
               <span className="text-2xl">🟡</span>
               <div className="text-left">
-                <p className="font-bold text-sm text-white group-hover:text-yellow-400">
+                <p
+                  className={`font-bold text-sm ${
+                    pickmeEnabled
+                      ? 'text-white group-hover:text-yellow-400'
+                      : 'text-gray-500 line-through'
+                  }`}
+                >
                   Order on PickMe
                 </p>
-                <p className="text-[11px] text-gray-400">Delivered via PickMe rider</p>
+                <p
+                  className={`text-[11px] ${
+                    pickmeEnabled ? 'text-gray-400' : 'text-red-400 font-semibold'
+                  }`}
+                >
+                  {pickmeEnabled ? 'Delivered via PickMe rider' : 'Currently Unavailable'}
+                </p>
               </div>
             </div>
-            <span className="text-xs text-gray-500 group-hover:text-white">↗</span>
+            <span
+              className={`text-xs ${
+                pickmeEnabled ? 'text-gray-500 group-hover:text-white' : 'text-gray-600'
+              }`}
+            >
+              {pickmeEnabled ? '↗' : 'Disabled'}
+            </span>
           </button>
 
           {/* Direct Order Button */}
