@@ -71,7 +71,7 @@ export default function Promos() {
           <div className="inline-flex items-center gap-2 bg-gradient-to-r from-[#e52a20]/25 via-[#ffbd18]/20 to-[#e52a20]/25 border border-[#e52a20]/50 px-5 py-2 rounded-full shadow-2xl backdrop-blur-md animate-bounce">
             <span className="text-base">🔥</span>
             <span className="text-[#ffbd18] text-[11px] font-black tracking-[0.25em] uppercase">
-              Hot Limited Wok Deals
+              Limited Time Offers
             </span>
           </div>
 
@@ -82,7 +82,7 @@ export default function Promos() {
             </span>
           </h2>
           <p className="text-gray-400 text-xs sm:text-sm max-w-xl mx-auto leading-relaxed">
-            Smoky wok-tossed rice packages paired with hot sides. Grab your discount before today&apos;s batch sells out!
+            Save money by taking advantage of our limited-time offers. Grab your discount before today&apos;s batch sells out!
           </p>
         </div>
 
@@ -98,13 +98,13 @@ export default function Promos() {
                 
                 {/* FLOATING RICE & CHILI SPLASH EFFECTS OVERLAY */}
                 <div className="absolute -top-8 -left-8 text-3xl sm:text-4xl pointer-events-none z-30 animate-[splash_4s_ease-in-out_infinite]">
-                  🍚
+                  
                 </div>
                 <div className="absolute -bottom-6 -right-6 text-3xl sm:text-4xl pointer-events-none z-30 animate-[splash_5s_ease-in-out_infinite_1s]">
                   🌶️
                 </div>
                 <div className="absolute top-1/2 -right-8 text-2xl pointer-events-none z-30 animate-[splash_6s_ease-in-out_infinite_2s]">
-                  🔥
+                  
                 </div>
 
                 {promos.map((promo) => {

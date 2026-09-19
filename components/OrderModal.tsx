@@ -265,7 +265,7 @@ export default function OrderModal() {
                       : 'text-gray-500 line-through'
                   }`}
                 >
-                  Dimutharu Delivery OR Pickup
+                  Dinutharu Delivery OR Pickup
                 </p>
                 <p
                   className={`text-[11px] ${

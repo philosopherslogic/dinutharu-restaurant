@@ -4,9 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 const ROTATING_HIGHLIGHTS = [
-  { text: 'GENEROUS PORTIONS', icon: '🍲', color: 'from-[#ffbd18] to-amber-400' },
-  { text: '100% FRESH INGREDIENTS', icon: '🌿', color: 'from-green-400 to-emerald-400' },
-  { text: 'EXPRESS LOCAL DELIVERY', icon: '🛵', color: 'from-[#e52a20] to-red-500' },
+  { text: '3.00PM - 8.00PM', icon: '🍲', color: 'from-[#ffbd18] to-amber-400' }
 ];
 
 export default function Hero() {
@@ -75,8 +73,6 @@ export default function Hero() {
           <div className="space-y-1 drop-shadow-2xl relative">
             
             {/* Floating Sparkle Accents */}
-            <span className="absolute -top-6 left-1/4 text-xl sm:text-2xl animate-bounce [animation-duration:4s]">✨</span>
-            <span className="absolute -bottom-2 right-1/4 text-xl sm:text-2xl animate-bounce [animation-duration:5s]">🔥</span>
 
             <h1 className="text-5xl sm:text-7xl lg:text-8xl font-black text-white tracking-tight leading-[1.02]">
               Dinu
@@ -91,7 +87,7 @@ export default function Hero() {
 
           {/* Concise Alive Description */}
           <p className="text-gray-200 text-sm sm:text-lg lg:text-xl max-w-2xl leading-relaxed font-medium drop-shadow-md">
-            Generous portions, vibrant local spices, and unbeatable wok-tossed flavor prepared fresh to order. Fast direct delivery to{' '}
+            Generous portions, vibrant local spices, and unbeatable hot-pan flavor prepared fresh to order. Fast direct delivery to{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ffbd18] to-amber-200 font-black">
               Bokundara, Piliyandala
             </span>{' '}

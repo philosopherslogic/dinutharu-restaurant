@@ -45,8 +45,8 @@ interface Order {
   created_at: string;
 }
 
-const RESTAURANT_LAT = 6.8018;
-const RESTAURANT_LNG = 79.9227;
+const RESTAURANT_LAT = 6.8221;
+const RESTAURANT_LNG = 79.9215;
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'promos' | 'settings'>('orders');
@@ -201,7 +201,6 @@ export default function AdminDashboard() {
   async function handleImageUpload(file: File): Promise<string | null> {
     setUploadingImage(true);
     
-    // Sanitize file name: remove spaces and special characters to prevent 400 Bad Request
     const sanitizedName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
     const fileName = `${Date.now()}-${sanitizedName}`;
     
@@ -396,13 +395,29 @@ export default function AdminDashboard() {
                     <p className="text-gray-500 text-sm">No orders recorded yet.</p>
                   ) : (
                     orders.map((order) => (
-                      <div key={order.id} className="bg-[#121212] border border-[#292929] rounded-2xl p-6 flex flex-col md:flex-row md:items-start justify-between gap-6">
+                      <div key={order.id} className="bg-[#121212] border border-[#292929] rounded-2xl p-6 flex flex-col md:flex-row md:items-start justify-between gap-6 shadow-xl">
                         <div className="space-y-3 flex-1">
                           
+                          {/* Order ID + Status Badge */}
                           <div className="flex items-center gap-3">
                             <span className="font-black text-lg text-[#ffbd18]">#{order.order_code || 'ORD'}</span>
                             <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full border ${getStatusBadgeColor(order.status)}`}>
                               {order.status.replace('_', ' ')}
+                            </span>
+                          </div>
+
+                          {/* EXACT ORDER DATE & TIME BADGE */}
+                          <div className="p-2.5 bg-[#070707] border border-[#222222] rounded-xl flex items-center gap-2 text-xs font-bold text-gray-300 w-fit">
+                            <span>🕒 Order Placed:</span>
+                            <span className="text-[#ffbd18]">
+                              {order.created_at ? new Date(order.created_at).toLocaleString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                                hour12: true
+                              }) : 'N/A'}
                             </span>
                           </div>
 
@@ -414,7 +429,7 @@ export default function AdminDashboard() {
                           <div className="bg-[#070707] p-3.5 rounded-xl border border-[#1f1f1f] text-xs space-y-1">
                             {order.delivery_type === 'delivery' ? (
                               <>
-                                <p className="font-bold text-green-400">🛵 Home Delivery ({order.distance_km || 0} km away)</p>
+                                <p className="font-bold text-green-400">🛵 Home Delivery ({order.distance_km ? order.distance_km.toFixed(2) : 0} km away)</p>
                                 <p className="text-gray-300 mt-1"><strong className="text-gray-400">Address:</strong> {order.address || 'N/A'}</p>
                               </>
                             ) : (

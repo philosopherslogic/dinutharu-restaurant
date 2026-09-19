@@ -6,27 +6,27 @@ import Image from 'next/image';
 const FEATURES = [
   {
     id: 'craft',
-    title: 'High-Heat Wok Mastery',
-    subtitle: 'Sizzling Flame Cooking',
-    desc: 'Our signature Nasi Goreng and Fried Rice packs are stir-fried on intense wok flames to lock in smoky aroma, crispy texture, and bold spices.',
+    title: 'Hot & Authentic Flavor',
+    subtitle: 'Sizzling Flame Cooked',
+    desc: 'Our signature Nasi Goreng and Fried Rice are tossed over high heat to give you that irresistible hot, savory flavor and mouth-watering aroma.',
     icon: '🔥',
-    highlight: 'Freshly Wok-Tossed',
+    highlight: 'Cooked Fresh To Order',
   },
   {
     id: 'quality',
-    title: 'Farm-Fresh Daily Stock',
-    subtitle: 'Zero Preservatives',
-    desc: 'We source fresh ingredients every morning. Non-reused oils and hygienic kitchen standards guarantee clean, healthy, and satisfying meals.',
-    icon: '🌿',
-    highlight: '100% Quality Ingredients',
+    title: 'Generous Portions & Fresh Food',
+    subtitle: 'Clean & Honest Cooking',
+    desc: 'Every plate is packed with generous portions, daily fresh meats, crisp vegetables, and clean ingredients. No reused oil, no shortcuts.',
+    icon: '🍲',
+    highlight: 'Full & Satisfying Meals',
   },
   {
     id: 'speed',
-    title: 'Hot Thermal Dispatch',
-    subtitle: 'Fast Local Delivery',
-    desc: 'Equipped with heat-retention packaging and direct local rider dispatch, your meal arrives piping hot whether delivered or picked up.',
+    title: 'Piping Hot Delivery',
+    subtitle: 'Fast Local Dispatch',
+    desc: 'Packed hot and delivered fast straight to your doorstep across Bokundara and Piliyandala, so your food arrives fresh and ready to enjoy.',
     icon: '🛵',
-    highlight: 'Under 30 Min Avg',
+    highlight: 'Express Local Delivery',
   },
 ];
 
@@ -65,7 +65,7 @@ export default function About() {
             </span>
           </h2>
           <p className="text-gray-400 text-xs sm:text-sm max-w-xl mx-auto leading-relaxed">
-            DinuTharu brings authentic wok-charred Nasi Goreng & Fried Rice directly to Piliyandala and surrounding areas.
+            DinuTharu brings freshly cooked, Flaming HOT Nasi Goreng & Fried Rice directly to Piliyandala and surrounding areas.
           </p>
         </div>
 
@@ -93,14 +93,7 @@ export default function About() {
                 />
               </div>
 
-              {/* Floating Live Badge */}
-              <div className="absolute -bottom-2 bg-[#121212]/95 backdrop-blur-md border border-[#2a2a2a] px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-3">
-                <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-ping" />
-                <span className="text-xs font-black text-white uppercase tracking-wider">
-                  Open & Cooking Hot
-                </span>
-              </div>
-
+              
             </div>
           </div>
 

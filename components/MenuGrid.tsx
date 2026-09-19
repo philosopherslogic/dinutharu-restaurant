@@ -81,7 +81,7 @@ export default function MenuGrid() {
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-16 space-y-3">
           <span className="text-[#ffbd18] bg-[#ffbd18]/10 border border-[#ffbd18]/20 px-4 py-1.5 rounded-full text-[10px] font-black tracking-[0.25em] uppercase inline-block shadow-sm">
-            Wok-Fired Excellence
+            Freshly Cooked & Delicious
           </span>
           <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
             Our <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ffbd18] via-amber-200 to-[#e52a20]">Signature Menu</span>
