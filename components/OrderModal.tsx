@@ -29,24 +29,46 @@ export default function OrderModal() {
       return;
     }
 
-    // 1. Fetch Item Details
+    // 1. Fetch Item Details (Checks menu_items first, then promos fallback)
     async function fetchOrderItem() {
-      const { data } = await supabase
+      // Try fetching from menu_items
+      const { data: menuData } = await supabase
         .from('menu_items')
         .select('*')
         .eq('id', orderId)
-        .single();
+        .maybeSingle();
 
-      if (data) {
+      if (menuData) {
         setSelectedItem({
-          id: data.id,
-          title: data.title,
-          description: data.description || '',
-          price: data.price,
-          image: data.image_url,
-          category: data.category,
-          isPopular: data.is_popular,
-          isAvailable: data.is_available,
+          id: menuData.id,
+          title: menuData.title,
+          description: menuData.description || '',
+          price: menuData.price,
+          image: menuData.image_url,
+          category: menuData.category,
+          isPopular: menuData.is_popular,
+          isAvailable: menuData.is_available,
+        });
+        return;
+      }
+
+      // Fallback: Check promos table if not in menu_items
+      const { data: promoData } = await supabase
+        .from('promos')
+        .select('*')
+        .eq('id', orderId)
+        .maybeSingle();
+
+      if (promoData) {
+        setSelectedItem({
+          id: promoData.id,
+          title: promoData.title,
+          description: promoData.description || '',
+          price: promoData.promo_price,
+          image: promoData.image_url,
+          category: 'promotions',
+          isPopular: true,
+          isAvailable: promoData.is_active ?? true,
         });
       }
     }

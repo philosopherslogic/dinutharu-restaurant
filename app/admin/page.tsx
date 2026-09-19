@@ -67,7 +67,7 @@ export default function AdminDashboard() {
   const [isRinging, setIsRinging] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Add/Edit Item States
+  // Add/Edit Menu Item States
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newPrice, setNewPrice] = useState('');
@@ -75,7 +75,14 @@ export default function AdminDashboard() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
 
-  // 1. Initialize Local Alert Audio & Unlock Browser Audio Policy
+  // Add/Edit Promo States
+  const [newPromoBadge, setNewPromoBadge] = useState('Special Offer');
+  const [newPromoTitle, setNewPromoTitle] = useState('');
+  const [newPromoDesc, setNewPromoDesc] = useState('');
+  const [newPromoOrigPrice, setNewPromoOrigPrice] = useState('');
+  const [newPromoPrice, setNewPromoPrice] = useState('');
+  const [editingPromo, setEditingPromo] = useState<PromoItem | null>(null);
+
   useEffect(() => {
     audioRef.current = new Audio('/alert.mp3');
     audioRef.current.loop = true;
@@ -111,7 +118,6 @@ export default function AdminDashboard() {
     }
   };
 
-  // 2. Setup Supabase Realtime Listener for New Incoming Orders
   useEffect(() => {
     fetchAllData();
 
@@ -123,8 +129,6 @@ export default function AdminDashboard() {
         (payload) => {
           const newOrder = payload.new as Order;
           setOrders((prevOrders) => [newOrder, ...prevOrders]);
-          
-          // Ring alarm on new order arrival
           playRingtone();
         }
       )
@@ -182,71 +186,37 @@ export default function AdminDashboard() {
   }
 
   const getGoogleMapsDirectionsUrl = (order: Order) => {
-    if (order.lat && order.lng) {
-      return `https://www.google.com/maps/dir/?api=1&origin=${RESTAURANT_LAT},${RESTAURANT_LNG}&destination=${order.lat},${order.lng}&travelmode=driving`;
-    }
-    if (order.address) {
-      return `https://www.google.com/maps/dir/?api=1&origin=${RESTAURANT_LAT},${RESTAURANT_LNG}&destination=${encodeURIComponent(order.address)}&travelmode=driving`;
-    }
+    if (order.lat && order.lng) return `https://www.google.com/maps/dir/?api=1&origin=${RESTAURANT_LAT},${RESTAURANT_LNG}&destination=${order.lat},${order.lng}&travelmode=driving`;
+    if (order.address) return `https://www.google.com/maps/dir/?api=1&origin=${RESTAURANT_LAT},${RESTAURANT_LNG}&destination=${encodeURIComponent(order.address)}&travelmode=driving`;
     return '#';
   };
 
-  // Multistage Order Status Updater
   async function updateOrderStatus(id: string, newStatus: Order['status']) {
     stopRingtone();
     const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', id);
-    if (!error) {
-      setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: newStatus } : o)));
-    } else {
-      console.error('Failed to update status:', error);
-      alert('Could not update status. Ensure SQL Enum includes this status value.');
-    }
+    if (!error) setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: newStatus } : o)));
   }
 
-  async function toggleMenuStock(id: string, currentStatus: boolean) {
-    const { error } = await supabase.from('menu_items').update({ is_available: !currentStatus }).eq('id', id);
-    if (!error) {
-      setMenuItems(menuItems.map((m) => (m.id === id ? { ...m, is_available: !currentStatus } : m)));
-    }
-  }
-
-  async function handleDeleteItem(id: string) {
-    if (!confirm('Are you sure you want to delete this menu item?')) return;
-    const { error } = await supabase.from('menu_items').delete().eq('id', id);
-    if (!error) {
-      setMenuItems(menuItems.filter((m) => m.id !== id));
-    }
-  }
-
-  async function toggleDirectDelivery() {
-    if (!settingsId) return;
-    const newStatus = !directDeliveryEnabled;
-    const { error } = await supabase.from('store_settings').update({ direct_delivery_enabled: newStatus }).eq('id', settingsId);
-    if (!error) setDirectDeliveryEnabled(newStatus);
-  }
-
-  async function toggleUberEats() {
-    if (!settingsId) return;
-    const newStatus = !ubereatsEnabled;
-    const { error } = await supabase.from('store_settings').update({ ubereats_enabled: newStatus }).eq('id', settingsId);
-    if (!error) setUbereatsEnabled(newStatus);
-  }
-
-  async function togglePickMe() {
-    if (!settingsId) return;
-    const newStatus = !pickmeEnabled;
-    const { error } = await supabase.from('store_settings').update({ pickme_enabled: newStatus }).eq('id', settingsId);
-    if (!error) setPickmeEnabled(newStatus);
-  }
-
+  // --- Shared Image Upload Logic ---
   async function handleImageUpload(file: File): Promise<string | null> {
     setUploadingImage(true);
-    const fileName = `${Date.now()}-${file.name}`;
-    const { error } = await supabase.storage.from('restaurant-assets').upload(fileName, file);
+    
+    // Sanitize file name: remove spaces and special characters to prevent 400 Bad Request
+    const sanitizedName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    const fileName = `${Date.now()}-${sanitizedName}`;
+    
+    const { data, error } = await supabase.storage
+      .from('restaurant-assets')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+      
     setUploadingImage(false);
 
     if (error) {
-      alert('Failed to upload image');
+      console.error('Supabase Upload Error:', error);
+      alert(`Upload failed: ${error.message}\n\nHint: Check if your 'restaurant-assets' bucket limits file size or MIME types.`);
       return null;
     }
 
@@ -254,28 +224,24 @@ export default function AdminDashboard() {
     return publicUrlData.publicUrl;
   }
 
+  // --- Menu CRUD Functions ---
+  async function toggleMenuStock(id: string, currentStatus: boolean) {
+    const { error } = await supabase.from('menu_items').update({ is_available: !currentStatus }).eq('id', id);
+    if (!error) setMenuItems(menuItems.map((m) => (m.id === id ? { ...m, is_available: !currentStatus } : m)));
+  }
+
+  async function handleDeleteItem(id: string) {
+    if (!confirm('Are you sure you want to delete this menu item?')) return;
+    const { error } = await supabase.from('menu_items').delete().eq('id', id);
+    if (!error) setMenuItems(menuItems.filter((m) => m.id !== id));
+  }
+
   async function handleAddMenuItem(imageUrl: string) {
-    if (!newTitle || !newPrice || !imageUrl) {
-      alert('Please fill out all fields and select an image.');
-      return;
-    }
-
-    const { data, error } = await supabase.from('menu_items').insert([
-      {
-        title: newTitle,
-        description: newDesc,
-        price: parseFloat(newPrice),
-        category: newCategory,
-        image_url: imageUrl,
-        is_available: true,
-      },
-    ]).select();
-
+    if (!newTitle || !newPrice || !imageUrl) return alert('Please fill out all fields and select an image.');
+    const { data, error } = await supabase.from('menu_items').insert([{ title: newTitle, description: newDesc, price: parseFloat(newPrice), category: newCategory, image_url: imageUrl, is_available: true }]).select();
     if (!error && data) {
       setMenuItems([data[0], ...menuItems]);
-      setNewTitle('');
-      setNewDesc('');
-      setNewPrice('');
+      setNewTitle(''); setNewDesc(''); setNewPrice('');
     }
   }
 
@@ -285,27 +251,90 @@ export default function AdminDashboard() {
 
     const inputEl = document.getElementById('edit-img-input') as HTMLInputElement;
     let imageUrl = editingItem.image_url;
-
     if (inputEl?.files?.[0]) {
       const uploadedUrl = await handleImageUpload(inputEl.files[0]);
       if (uploadedUrl) imageUrl = uploadedUrl;
     }
 
-    const { error } = await supabase
-      .from('menu_items')
-      .update({
-        title: editingItem.title,
-        description: editingItem.description,
-        price: editingItem.price,
-        category: editingItem.category,
-        image_url: imageUrl,
-      })
-      .eq('id', editingItem.id);
-
+    const { error } = await supabase.from('menu_items').update({ title: editingItem.title, description: editingItem.description, price: editingItem.price, category: editingItem.category, image_url: imageUrl }).eq('id', editingItem.id);
     if (!error) {
       setMenuItems(menuItems.map((m) => (m.id === editingItem.id ? { ...editingItem, image_url: imageUrl } : m)));
       setEditingItem(null);
     }
+  }
+
+  // --- Promos CRUD Functions ---
+  async function togglePromoActive(id: string, currentStatus: boolean) {
+    const { error } = await supabase.from('promos').update({ is_active: !currentStatus }).eq('id', id);
+    if (!error) setPromos(promos.map((p) => (p.id === id ? { ...p, is_active: !currentStatus } : p)));
+  }
+
+  async function handleDeletePromo(id: string) {
+    if (!confirm('Are you sure you want to delete this promotional deal?')) return;
+    const { error } = await supabase.from('promos').delete().eq('id', id);
+    if (!error) setPromos(promos.filter((p) => p.id !== id));
+  }
+
+  async function handleAddPromo(imageUrl: string) {
+    if (!newPromoTitle || !newPromoPrice || !newPromoOrigPrice || !imageUrl) return alert('Fill out all promo fields and image.');
+    
+    const { data, error } = await supabase.from('promos').insert([{
+      badge: newPromoBadge,
+      title: newPromoTitle,
+      description: newPromoDesc,
+      original_price: parseFloat(newPromoOrigPrice),
+      promo_price: parseFloat(newPromoPrice),
+      image_url: imageUrl,
+      is_active: true
+    }]).select();
+
+    if (!error && data) {
+      setPromos([data[0], ...promos]);
+      setNewPromoBadge('Special Offer'); setNewPromoTitle(''); setNewPromoDesc(''); setNewPromoOrigPrice(''); setNewPromoPrice('');
+    }
+  }
+
+  async function handleSavePromoEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingPromo) return;
+
+    const inputEl = document.getElementById('edit-promo-img') as HTMLInputElement;
+    let imageUrl = editingPromo.image_url;
+    if (inputEl?.files?.[0]) {
+      const uploadedUrl = await handleImageUpload(inputEl.files[0]);
+      if (uploadedUrl) imageUrl = uploadedUrl;
+    }
+
+    const { error } = await supabase.from('promos').update({
+      badge: editingPromo.badge,
+      title: editingPromo.title,
+      description: editingPromo.description,
+      original_price: editingPromo.original_price,
+      promo_price: editingPromo.promo_price,
+      image_url: imageUrl
+    }).eq('id', editingPromo.id);
+
+    if (!error) {
+      setPromos(promos.map((p) => (p.id === editingPromo.id ? { ...editingPromo, image_url: imageUrl } : p)));
+      setEditingPromo(null);
+    }
+  }
+
+  // --- Toggles Functions ---
+  async function toggleDirectDelivery() {
+    if (!settingsId) return;
+    const { error } = await supabase.from('store_settings').update({ direct_delivery_enabled: !directDeliveryEnabled }).eq('id', settingsId);
+    if (!error) setDirectDeliveryEnabled(!directDeliveryEnabled);
+  }
+  async function toggleUberEats() {
+    if (!settingsId) return;
+    const { error } = await supabase.from('store_settings').update({ ubereats_enabled: !ubereatsEnabled }).eq('id', settingsId);
+    if (!error) setUbereatsEnabled(!ubereatsEnabled);
+  }
+  async function togglePickMe() {
+    if (!settingsId) return;
+    const { error } = await supabase.from('store_settings').update({ pickme_enabled: !pickmeEnabled }).eq('id', settingsId);
+    if (!error) setPickmeEnabled(!pickmeEnabled);
   }
 
   const getStatusBadgeColor = (status: Order['status']) => {
@@ -322,55 +351,20 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-[#070707] text-white flex flex-col md:flex-row">
-      {/* Sidebar Navigation */}
       <aside className="w-full md:w-64 bg-[#121212] border-r border-[#222222] p-6 flex flex-col justify-between">
         <div>
           <h2 className="text-xl font-extrabold tracking-wider text-[#ffbd18]">DinuTharu Admin</h2>
           <nav className="mt-8 space-y-2">
-            <button
-              onClick={() => setActiveTab('orders')}
-              className={`w-full text-left px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${
-                activeTab === 'orders' ? 'bg-[#ffbd18] text-[#070707]' : 'text-gray-400 hover:bg-[#1f1f1f]'
-              }`}
-            >
-              📦 Live Orders ({orders.filter((o) => o.status === 'pending').length})
-            </button>
-            <button
-              onClick={() => setActiveTab('menu')}
-              className={`w-full text-left px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${
-                activeTab === 'menu' ? 'bg-[#ffbd18] text-[#070707]' : 'text-gray-400 hover:bg-[#1f1f1f]'
-              }`}
-            >
-              🍚 Menu CRUD & Stock
-            </button>
-            <button
-              onClick={() => setActiveTab('promos')}
-              className={`w-full text-left px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${
-                activeTab === 'promos' ? 'bg-[#ffbd18] text-[#070707]' : 'text-gray-400 hover:bg-[#1f1f1f]'
-              }`}
-            >
-              🏷️ Promos Management
-            </button>
-            <button
-              onClick={() => setActiveTab('settings')}
-              className={`w-full text-left px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${
-                activeTab === 'settings' ? 'bg-[#ffbd18] text-[#070707]' : 'text-gray-400 hover:bg-[#1f1f1f]'
-              }`}
-            >
-              ⚙️ Delivery Toggles
-            </button>
+            <button onClick={() => setActiveTab('orders')} className={`w-full text-left px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${activeTab === 'orders' ? 'bg-[#ffbd18] text-[#070707]' : 'text-gray-400 hover:bg-[#1f1f1f]'}`}>📦 Live Orders ({orders.filter((o) => o.status === 'pending').length})</button>
+            <button onClick={() => setActiveTab('menu')} className={`w-full text-left px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${activeTab === 'menu' ? 'bg-[#ffbd18] text-[#070707]' : 'text-gray-400 hover:bg-[#1f1f1f]'}`}>🍚 Menu CRUD & Stock</button>
+            <button onClick={() => setActiveTab('promos')} className={`w-full text-left px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${activeTab === 'promos' ? 'bg-[#ffbd18] text-[#070707]' : 'text-gray-400 hover:bg-[#1f1f1f]'}`}>🏷️ Promos Management</button>
+            <button onClick={() => setActiveTab('settings')} className={`w-full text-left px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${activeTab === 'settings' ? 'bg-[#ffbd18] text-[#070707]' : 'text-gray-400 hover:bg-[#1f1f1f]'}`}>⚙️ Delivery Toggles</button>
           </nav>
         </div>
-
-        <Link href="/" className="mt-8 text-xs text-gray-500 hover:text-white uppercase font-bold tracking-wider">
-          ← Exit to Storefront
-        </Link>
+        <Link href="/" className="mt-8 text-xs text-gray-500 hover:text-white uppercase font-bold tracking-wider">← Exit to Storefront</Link>
       </aside>
 
-      {/* Main Workspace */}
       <main className="flex-1 p-6 md:p-10 max-w-6xl">
-        
-        {/* Incoming Call Ringing Alert Bar */}
         {isRinging && (
           <div className="mb-6 p-4 bg-red-600 animate-bounce rounded-2xl flex items-center justify-between shadow-2xl text-white">
             <div className="flex items-center gap-3">
@@ -380,12 +374,7 @@ export default function AdminDashboard() {
                 <p className="text-xs text-white/90">A new customer order has been received in real-time.</p>
               </div>
             </div>
-            <button
-              onClick={stopRingtone}
-              className="px-6 py-2.5 bg-black text-amber-400 font-black text-xs uppercase rounded-xl hover:bg-gray-900 shadow-lg"
-            >
-              🔕 Stop Sound
-            </button>
+            <button onClick={stopRingtone} className="px-6 py-2.5 bg-black text-amber-400 font-black text-xs uppercase rounded-xl hover:bg-gray-900 shadow-lg">🔕 Stop Sound</button>
           </div>
         )}
 
@@ -399,11 +388,9 @@ export default function AdminDashboard() {
                 <div className="flex items-center justify-between">
                   <h1 className="text-2xl font-black">Incoming Customer Orders</h1>
                   <span className="text-xs text-green-400 font-bold flex items-center gap-2 bg-green-500/10 px-3 py-1.5 rounded-full border border-green-500/20">
-                    <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
-                    Live Realtime Active
+                    <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span> Live Realtime Active
                   </span>
                 </div>
-
                 <div className="grid grid-cols-1 gap-4">
                   {orders.length === 0 ? (
                     <p className="text-gray-500 text-sm">No orders recorded yet.</p>
@@ -417,40 +404,26 @@ export default function AdminDashboard() {
                             <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full border ${getStatusBadgeColor(order.status)}`}>
                               {order.status.replace('_', ' ')}
                             </span>
-                            <span className="text-[11px] text-gray-500">
-                              {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
                           </div>
 
                           <div>
                             <h3 className="text-lg font-bold text-white">{order.customer_name}</h3>
-                            <a href={`tel:${order.phone}`} className="text-xs text-[#ffbd18] hover:underline font-semibold block mt-0.5">
-                              📞 {order.phone}
-                            </a>
+                            <a href={`tel:${order.phone}`} className="text-xs text-[#ffbd18] hover:underline font-semibold block mt-0.5">📞 {order.phone}</a>
                           </div>
 
                           <div className="bg-[#070707] p-3.5 rounded-xl border border-[#1f1f1f] text-xs space-y-1">
                             {order.delivery_type === 'delivery' ? (
                               <>
-                                <p className="font-bold text-green-400 flex items-center gap-1.5">
-                                  <span>🛵 Home Delivery</span>
-                                  <span className="text-gray-400 font-normal">({order.distance_km || 0} km away)</span>
-                                </p>
-                                <p className="text-gray-300 mt-1">
-                                  <strong className="text-gray-400">Address:</strong> {order.address || 'N/A'}
-                                </p>
+                                <p className="font-bold text-green-400">🛵 Home Delivery ({order.distance_km || 0} km away)</p>
+                                <p className="text-gray-300 mt-1"><strong className="text-gray-400">Address:</strong> {order.address || 'N/A'}</p>
                               </>
                             ) : (
-                              <p className="font-bold text-amber-400">
-                                🏪 Store Pickup scheduled at: <span className="text-white font-extrabold">{order.pickup_time || 'Not specified'}</span>
-                              </p>
+                              <p className="font-bold text-amber-400">🏪 Store Pickup scheduled at: <span className="text-white font-extrabold">{order.pickup_time || 'Not specified'}</span></p>
                             )}
                           </div>
 
                           {order.notes && (
-                            <p className="text-xs text-amber-300 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20">
-                              📝 <strong>Note:</strong> {order.notes}
-                            </p>
+                            <p className="text-xs text-amber-300 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20">📝 <strong>Note:</strong> {order.notes}</p>
                           )}
 
                           <div className="bg-[#070707] p-3.5 rounded-xl border border-[#1f1f1f] text-xs space-y-1.5">
@@ -470,75 +443,25 @@ export default function AdminDashboard() {
 
                         </div>
 
-                        {/* Action Buttons Column */}
                         <div className="flex flex-col gap-2 min-w-[200px]">
                           {order.delivery_type === 'delivery' && (
-                            <a
-                              href={getGoogleMapsDirectionsUrl(order)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="w-full py-2.5 px-4 bg-[#181818] border border-[#292929] hover:border-green-500 text-green-400 hover:text-white text-xs font-bold uppercase rounded-xl transition-all flex items-center justify-center gap-2 shadow-md mb-2"
-                            >
-                              <span>📍</span>
-                              <span>Open in Maps</span>
+                            <a href={getGoogleMapsDirectionsUrl(order)} target="_blank" rel="noopener noreferrer" className="w-full py-2.5 px-4 bg-[#181818] border border-[#292929] hover:border-green-500 text-green-400 hover:text-white text-xs font-bold uppercase rounded-xl transition-all flex items-center justify-center gap-2 shadow-md mb-2">
+                              <span>📍</span> Open in Maps
                             </a>
                           )}
-
-                          {/* Multistage Order Lifecycle Actions */}
                           {order.status === 'pending' && (
                             <>
-                              <button
-                                onClick={() => updateOrderStatus(order.id, 'accepted')}
-                                className="w-full py-3 bg-[#20c45a] hover:bg-[#1bb050] text-white font-black text-xs uppercase rounded-xl transition-all shadow-lg"
-                              >
-                                ✓ Accept Order
-                              </button>
-                              <button
-                                onClick={() => updateOrderStatus(order.id, 'cancelled')}
-                                className="w-full py-2 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/30 text-xs font-bold uppercase rounded-xl transition-all"
-                              >
-                                ✕ Decline Order
-                              </button>
+                              <button onClick={() => updateOrderStatus(order.id, 'accepted')} className="w-full py-3 bg-[#20c45a] hover:bg-[#1bb050] text-white font-black text-xs uppercase rounded-xl transition-all shadow-lg">✓ Accept Order</button>
+                              <button onClick={() => updateOrderStatus(order.id, 'cancelled')} className="w-full py-2 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/30 text-xs font-bold uppercase rounded-xl transition-all">✕ Decline Order</button>
                             </>
                           )}
-
-                          {order.status === 'accepted' && (
-                            <button
-                              onClick={() => updateOrderStatus(order.id, 'preparing')}
-                              className="w-full py-3 bg-[#ffbd18] hover:bg-[#e0a410] text-[#070707] font-black text-xs uppercase rounded-xl transition-all shadow-lg"
-                            >
-                              👨‍🍳 Set to "Preparing"
-                            </button>
-                          )}
-
-                          {order.status === 'preparing' && (
-                            <button
-                              onClick={() => updateOrderStatus(order.id, 'in_delivery')}
-                              className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-black text-xs uppercase rounded-xl transition-all shadow-lg"
-                            >
-                              🛵 Set to "In Delivery"
-                            </button>
-                          )}
-
-                          {order.status === 'in_delivery' && (
-                            <button
-                              onClick={() => updateOrderStatus(order.id, 'completed')}
-                              className="w-full py-3 bg-green-500 hover:bg-green-600 text-black font-black text-xs uppercase rounded-xl transition-all shadow-lg"
-                            >
-                              🎉 Mark as "Completed"
-                            </button>
-                          )}
-
+                          {order.status === 'accepted' && <button onClick={() => updateOrderStatus(order.id, 'preparing')} className="w-full py-3 bg-[#ffbd18] hover:bg-[#e0a410] text-[#070707] font-black text-xs uppercase rounded-xl transition-all shadow-lg">👨‍🍳 Set to "Preparing"</button>}
+                          {order.status === 'preparing' && <button onClick={() => updateOrderStatus(order.id, 'in_delivery')} className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-black text-xs uppercase rounded-xl transition-all shadow-lg">🛵 Set to "In Delivery"</button>}
+                          {order.status === 'in_delivery' && <button onClick={() => updateOrderStatus(order.id, 'completed')} className="w-full py-3 bg-green-500 hover:bg-green-600 text-black font-black text-xs uppercase rounded-xl transition-all shadow-lg">🎉 Mark as "Completed"</button>}
                           {order.status !== 'completed' && order.status !== 'cancelled' && order.status !== 'pending' && (
-                            <button
-                              onClick={() => updateOrderStatus(order.id, 'cancelled')}
-                              className="w-full py-1.5 text-[11px] text-red-400 hover:underline font-bold uppercase mt-1 text-center"
-                            >
-                              Cancel Order
-                            </button>
+                            <button onClick={() => updateOrderStatus(order.id, 'cancelled')} className="w-full py-1.5 text-[11px] text-red-400 hover:underline font-bold uppercase mt-1 text-center">Cancel Order</button>
                           )}
                         </div>
-
                       </div>
                     ))
                   )}
@@ -607,16 +530,10 @@ export default function AdminDashboard() {
                         >
                           {item.is_available ? 'In Stock' : 'Out of Stock'}
                         </button>
-                        <button
-                          onClick={() => setEditingItem(item)}
-                          className="px-3 py-1.5 bg-[#181818] border border-[#333] hover:border-[#ffbd18] text-xs font-bold rounded-lg"
-                        >
+                        <button onClick={() => setEditingItem(item)} className="px-3 py-1.5 bg-[#181818] border border-[#333] hover:border-[#ffbd18] text-xs font-bold rounded-lg">
                           Edit
                         </button>
-                        <button
-                          onClick={() => handleDeleteItem(item.id)}
-                          className="px-3 py-1.5 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white text-xs font-bold rounded-lg"
-                        >
+                        <button onClick={() => handleDeleteItem(item.id)} className="px-3 py-1.5 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white text-xs font-bold rounded-lg">
                           Delete
                         </button>
                       </div>
@@ -629,24 +546,77 @@ export default function AdminDashboard() {
             {/* 3. PROMOS TAB */}
             {activeTab === 'promos' && (
               <div className="space-y-6">
-                <h1 className="text-2xl font-black">Promotional Deals</h1>
-                <div className="space-y-4">
+                <h1 className="text-2xl font-black">Promotional Deals Management</h1>
+
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    const inputEl = document.getElementById('promo-img-input') as HTMLInputElement;
+                    const file = inputEl?.files?.[0];
+                    if (!file) return alert('Please select an image file first.');
+                    const imageUrl = await handleImageUpload(file);
+                    if (imageUrl) handleAddPromo(imageUrl);
+                  }}
+                  className="bg-[#121212] border border-[#292929] rounded-2xl p-6 space-y-4 shadow-xl"
+                >
+                  <h3 className="text-sm font-bold text-[#ffbd18] uppercase tracking-wider">Add New Promotion</h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input type="text" placeholder="Promo Title (e.g. Combo Special)" required value={newPromoTitle} onChange={(e) => setNewPromoTitle(e.target.value)} className="w-full bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm outline-none focus:border-[#ffbd18]" />
+                    <input type="text" placeholder="Badge Text (e.g. Special Offer)" required value={newPromoBadge} onChange={(e) => setNewPromoBadge(e.target.value)} className="w-full bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm outline-none focus:border-[#ffbd18]" />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input type="number" placeholder="Original Price (LKR)" required value={newPromoOrigPrice} onChange={(e) => setNewPromoOrigPrice(e.target.value)} className="w-full bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm outline-none focus:border-[#ffbd18]" />
+                    <input type="number" placeholder="Discounted Price (LKR)" required value={newPromoPrice} onChange={(e) => setNewPromoPrice(e.target.value)} className="w-full bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm outline-none focus:border-[#ffbd18]" />
+                  </div>
+
+                  <textarea rows={2} placeholder="Appetizing Description" required value={newPromoDesc} onChange={(e) => setNewPromoDesc(e.target.value)} className="w-full bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm outline-none focus:border-[#ffbd18]" />
+                  
+                  <div className="flex items-center justify-between gap-4 border-t border-[#222222] pt-4">
+                    <input id="promo-img-input" type="file" accept="image/*" className="text-xs text-gray-400" />
+                    <button type="submit" disabled={uploadingImage} className="px-6 py-2.5 bg-[#ffbd18] text-[#070707] font-black text-xs uppercase rounded-xl hover:bg-[#e0a410] shadow-lg">
+                      {uploadingImage ? 'Uploading Image...' : '+ Publish Promo'}
+                    </button>
+                  </div>
+                </form>
+
+                <div className="grid grid-cols-1 gap-4">
                   {promos.length === 0 ? (
                     <p className="text-gray-500 text-sm">No active promo items created yet.</p>
                   ) : (
                     promos.map((promo) => (
-                      <div key={promo.id} className="bg-[#121212] border border-[#292929] rounded-2xl p-4 flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                          <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-[#070707]">
+                      <div key={promo.id} className="bg-[#121212] border border-[#292929] rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-6 shadow-lg">
+                        
+                        <div className="flex items-center gap-4 w-full md:w-auto">
+                          <div className="relative w-24 h-24 rounded-xl overflow-hidden bg-[#070707] flex-shrink-0 border border-[#222]">
                             <Image src={promo.image_url} alt={promo.title} fill className="object-cover" />
                           </div>
-                          <div>
-                            <span className="text-[10px] font-black uppercase text-[#e52a20]">{promo.badge}</span>
-                            <h3 className="font-bold text-white">{promo.title}</h3>
-                            <p className="text-xs text-[#ffbd18] font-bold">
-                              LKR {promo.promo_price} <span className="line-through text-gray-500 text-[10px]">{promo.original_price}</span>
+                          <div className="space-y-1">
+                            <span className="text-[9px] font-black uppercase text-[#e52a20] bg-red-500/10 px-2 py-0.5 rounded-md border border-red-500/20">{promo.badge}</span>
+                            <h3 className="font-bold text-white text-base">{promo.title}</h3>
+                            <p className="text-[10px] text-gray-400 line-clamp-1">{promo.description}</p>
+                            <p className="text-xs text-[#ffbd18] font-black mt-1">
+                              LKR {promo.promo_price} <span className="line-through text-gray-500 text-[10px] ml-1">LKR {promo.original_price}</span>
                             </p>
                           </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+                          <button
+                            onClick={() => togglePromoActive(promo.id, promo.is_active)}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase border transition-all ${
+                              promo.is_active ? 'bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500 hover:text-black' : 'bg-[#181818] text-gray-400 border-[#333] hover:text-white'
+                            }`}
+                          >
+                            {promo.is_active ? 'Active' : 'Hidden'}
+                          </button>
+                          <button onClick={() => setEditingPromo(promo)} className="px-4 py-2 bg-[#181818] border border-[#333] hover:border-[#ffbd18] text-[#ffbd18] text-[10px] font-black uppercase rounded-xl">
+                            Edit
+                          </button>
+                          <button onClick={() => handleDeletePromo(promo.id)} className="px-4 py-2 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white text-[10px] font-black uppercase rounded-xl">
+                            Delete
+                          </button>
                         </div>
                       </div>
                     ))
@@ -713,49 +683,76 @@ export default function AdminDashboard() {
         )}
       </main>
 
-      {/* Edit Item Modal */}
+      {/* Edit Menu Modal */}
       {editingItem && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#121212] border border-[#292929] rounded-2xl p-6 max-w-md w-full space-y-4 text-white shadow-2xl">
             <h3 className="text-lg font-bold text-[#ffbd18]">Edit Item: {editingItem.title}</h3>
             <div>
               <label className="text-xs text-gray-400 block mb-1">Title</label>
-              <input
-                type="text"
-                value={editingItem.title}
-                onChange={(e) => setEditingItem({ ...editingItem, title: e.target.value })}
-                className="w-full bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm text-white outline-none"
-              />
+              <input type="text" value={editingItem.title} onChange={(e) => setEditingItem({ ...editingItem, title: e.target.value })} className="w-full bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm text-white outline-none" />
             </div>
             <div>
               <label className="text-xs text-gray-400 block mb-1">Price (LKR)</label>
-              <input
-                type="number"
-                value={editingItem.price}
-                onChange={(e) => setEditingItem({ ...editingItem, price: parseFloat(e.target.value) || 0 })}
-                className="w-full bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm text-white outline-none"
-              />
+              <input type="number" value={editingItem.price} onChange={(e) => setEditingItem({ ...editingItem, price: parseFloat(e.target.value) || 0 })} className="w-full bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm text-white outline-none" />
             </div>
             <div>
               <label className="text-xs text-gray-400 block mb-1">Description</label>
-              <textarea
-                rows={3}
-                value={editingItem.description}
-                onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
-                className="w-full bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm text-white outline-none"
-              />
+              <textarea rows={3} value={editingItem.description} onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })} className="w-full bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm text-white outline-none" />
             </div>
             <div>
               <label className="text-xs text-gray-400 block mb-1">Replace Image (Optional)</label>
               <input id="edit-img-input" type="file" accept="image/*" className="text-xs text-gray-400" />
             </div>
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#222]">
-              <button type="button" onClick={() => setEditingItem(null)} className="px-4 py-2 text-xs font-bold text-gray-400 hover:text-white">
-                Cancel
-              </button>
-              <button type="button" onClick={handleSaveEdit} className="px-6 py-2 bg-[#ffbd18] text-[#070707] text-xs font-black rounded-xl hover:bg-[#e0a410]">
-                Save Changes
-              </button>
+              <button type="button" onClick={() => setEditingItem(null)} className="px-4 py-2 text-xs font-bold text-gray-400 hover:text-white">Cancel</button>
+              <button type="button" onClick={handleSaveEdit} className="px-6 py-2 bg-[#ffbd18] text-[#070707] text-xs font-black rounded-xl hover:bg-[#e0a410]">Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Promo Modal */}
+      {editingPromo && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#121212] border border-[#292929] rounded-3xl p-6 max-w-md w-full space-y-4 text-white shadow-2xl">
+            <h3 className="text-lg font-bold text-[#ffbd18]">Edit Promo Deal</h3>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Title</label>
+                <input type="text" value={editingPromo.title} onChange={(e) => setEditingPromo({ ...editingPromo, title: e.target.value })} className="w-full bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm outline-none" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Badge</label>
+                <input type="text" value={editingPromo.badge} onChange={(e) => setEditingPromo({ ...editingPromo, badge: e.target.value })} className="w-full bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm outline-none" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Orig. Price (LKR)</label>
+                <input type="number" value={editingPromo.original_price} onChange={(e) => setEditingPromo({ ...editingPromo, original_price: parseFloat(e.target.value) || 0 })} className="w-full bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm outline-none" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Promo Price (LKR)</label>
+                <input type="number" value={editingPromo.promo_price} onChange={(e) => setEditingPromo({ ...editingPromo, promo_price: parseFloat(e.target.value) || 0 })} className="w-full bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm outline-none" />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Description</label>
+              <textarea rows={2} value={editingPromo.description} onChange={(e) => setEditingPromo({ ...editingPromo, description: e.target.value })} className="w-full bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm outline-none" />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Replace Image</label>
+              <input id="edit-promo-img" type="file" accept="image/*" className="text-xs text-gray-400" />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#222]">
+              <button type="button" onClick={() => setEditingPromo(null)} className="px-5 py-2.5 text-xs font-bold text-gray-400 hover:text-white">Cancel</button>
+              <button type="button" onClick={handleSavePromoEdit} className="px-6 py-2.5 bg-[#ffbd18] text-[#070707] text-xs font-black uppercase rounded-xl hover:bg-[#e0a410] shadow-lg">Save Changes</button>
             </div>
           </div>
         </div>

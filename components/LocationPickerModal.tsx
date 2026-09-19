@@ -6,17 +6,54 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { getSavedCustomerProfile } from '@/lib/customerIdentity';
 
-// Fix default Leaflet marker icon issue in Next.js
-const customIcon = new L.Icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
+// Update these to your exact copied coordinates from Google Maps
+const RESTAURANT_COORDS: [number, number] = [6.8018, 79.9227];
+
+// Custom Red Store Marker with Restaurant Icon
+const restaurantIcon = L.divIcon({
+  className: 'custom-restaurant-pin',
+  html: `
+    <div style="
+      background-color: #e52a20;
+      width: 38px;
+      height: 38px;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 3px solid #ffffff;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    ">
+      <span style="transform: rotate(45deg); font-size: 18px;">🏪</span>
+    </div>
+  `,
+  iconSize: [38, 38],
+  iconAnchor: [19, 38],
 });
 
-// Restaurant Coordinates (Bokundara / Piliyandala)
-const RESTAURANT_COORDS: [number, number] = [6.8018, 79.9227];
+// Custom Gold/Amber Customer Delivery Marker with Home/User Icon
+const customerIcon = L.divIcon({
+  className: 'custom-customer-pin',
+  html: `
+    <div style="
+      background-color: #ffbd18;
+      width: 38px;
+      height: 38px;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 3px solid #070707;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    ">
+      <span style="transform: rotate(45deg); font-size: 18px;">📍</span>
+    </div>
+  `,
+  iconSize: [38, 38],
+  iconAnchor: [19, 38],
+});
 
 interface LocationPickerProps {
   isOpen: boolean;
@@ -24,7 +61,6 @@ interface LocationPickerProps {
   onConfirmLocation: (distanceKm: number, lat: number, lng: number) => void;
 }
 
-// Map Component that automatically zooms/pans to fit both pins and the road path
 function MapController({
   userLat,
   userLng,
@@ -38,7 +74,6 @@ function MapController({
 }) {
   const map = useMap();
 
-  // Attach click listener for manually dropping a pin
   useEffect(() => {
     const handleMapClick = (e: L.LeafletMouseEvent) => {
       onLocationSelect(e.latlng.lat, e.latlng.lng);
@@ -50,7 +85,6 @@ function MapController({
     };
   }, [map, onLocationSelect]);
 
-  // Adjust camera bounds whenever user pin or route line updates
   useEffect(() => {
     if (userLat !== null && userLng !== null) {
       const bounds = L.latLngBounds([
@@ -73,14 +107,12 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [loadingDistance, setLoadingDistance] = useState(false);
   
-  // Status & Guidance State
   const [permissionNotice, setPermissionNotice] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Function to request GPS location with explicit error handling
   const requestGPSLocation = () => {
     if (typeof window === 'undefined' || !navigator.geolocation) {
-      setPermissionNotice('⚠️ Geolocation is not supported by your browser. Please tap on the map to set your delivery location manually.');
+      setPermissionNotice('⚠️ Geolocation is not supported by your browser. Tap on the map to set location manually.');
       return;
     }
 
@@ -97,16 +129,16 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
         setLoadingDistance(false);
         switch (err.code) {
           case err.PERMISSION_DENIED:
-            setPermissionNotice('🔒 Location permission denied. Please allow location access in your browser settings, or tap on the map to select your pin manually.');
+            setPermissionNotice('🔒 Location permission denied. Allow access in settings or tap the map manually.');
             break;
           case err.POSITION_UNAVAILABLE:
-            setPermissionNotice('📡 GPS/Location is turned off on your device. Please turn on Location/GPS on your phone and try again, or manually pick your pin on the map.');
+            setPermissionNotice('📡 GPS is turned off on your device. Please enable Location services.');
             break;
           case err.TIMEOUT:
-            setPermissionNotice('⏱️ GPS request timed out. Please tap directly on the map to select your location manually.');
+            setPermissionNotice('⏱️ GPS request timed out. Please tap directly on the map.');
             break;
           default:
-            setPermissionNotice('⚠️ Unable to detect GPS location. Please click or tap on the map to manually pick your delivery pin.');
+            setPermissionNotice('⚠️ Unable to detect GPS location. Tap directly on the map.');
             break;
         }
       },
@@ -114,23 +146,18 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
     );
   };
 
-  // Smart Initialization on Modal Open: Restore Saved Pin or fallback to GPS
   useEffect(() => {
     if (isOpen) {
       const savedProfile = getSavedCustomerProfile();
-      
-      // If customer already has a saved pin from a previous order, use it!
       if (savedProfile && savedProfile.lat && savedProfile.lng) {
         setSelectedLat(savedProfile.lat);
         setSelectedLng(savedProfile.lng);
       } else if (selectedLat === null || selectedLng === null) {
-        // Only request fresh GPS if no saved pin exists and state is empty
         requestGPSLocation();
       }
     }
   }, [isOpen]);
 
-  // Calculate road distance & fetch route geometry from OSRM whenever coordinates change
   useEffect(() => {
     if (selectedLat === null || selectedLng === null) return;
 
@@ -158,11 +185,11 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
             setErrorMsg(`Selected location is ${km.toFixed(1)} km away via road. We only deliver within 5 km!`);
           }
         } else {
-          setErrorMsg('Could not calculate driving distance. Please tap another pin position on the map.');
+          setErrorMsg('Could not calculate driving distance. Please tap another position.');
         }
       } catch (err) {
         console.error('OSRM API Error:', err);
-        setErrorMsg('Failed to calculate road route. Please tap manually on the map to select location.');
+        setErrorMsg('Failed to calculate route. Please tap manually on the map.');
       } finally {
         setLoadingDistance(false);
       }
@@ -191,12 +218,12 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
         <div className="flex items-center justify-between border-b border-[#222] pb-3">
           <div>
             <h3 className="text-lg font-extrabold text-[#ffbd18]">Delivery Location & Map Route</h3>
-            <p className="text-xs text-gray-400">Allow location access or tap on the map to set your pin</p>
+            <p className="text-xs text-gray-400">Tap on the map or detect GPS to place your delivery pin</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-white text-sm">✕</button>
         </div>
 
-        {/* Dynamic Permission & Guidance Banner */}
+        {/* Permission Banner */}
         {permissionNotice && (
           <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400 text-xs flex items-center justify-between gap-2">
             <span>{permissionNotice}</span>
@@ -218,7 +245,7 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
           <span>🎯</span> Detect My Current GPS Location
         </button>
 
-        {/* Leaflet Map Canvas */}
+        {/* Map Canvas */}
         <div className="h-80 w-full rounded-xl overflow-hidden border border-[#222] relative">
           <MapContainer
             center={RESTAURANT_COORDS}
@@ -230,20 +257,19 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
 
-            {/* Restaurant Pin */}
-            <Marker position={RESTAURANT_COORDS} icon={customIcon} />
+            {/* Red Restaurant Pin */}
+            <Marker position={RESTAURANT_COORDS} icon={restaurantIcon} />
 
-            {/* User Selected Delivery Pin */}
+            {/* Gold Customer Pin */}
             {selectedLat !== null && selectedLng !== null && (
-              <Marker position={[selectedLat, selectedLng]} icon={customIcon} />
+              <Marker position={[selectedLat, selectedLng]} icon={customerIcon} />
             )}
 
-            {/* Road Path Highlight Line */}
+            {/* Route Polyline */}
             {routePolyline.length > 0 && (
               <Polyline positions={routePolyline} color="#ffbd18" weight={5} opacity={0.8} />
             )}
 
-            {/* Camera View Bounds Controller */}
             <MapController
               userLat={selectedLat}
               userLng={selectedLng}
@@ -257,8 +283,8 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
           </MapContainer>
         </div>
 
-        {/* Distance Info & Validation Bar */}
-        {loadingDistance && <p className="text-xs text-gray-400 animate-pulse">Checking GPS & calculating road route...</p>}
+        {/* Distance Info */}
+        {loadingDistance && <p className="text-xs text-gray-400 animate-pulse">Calculating road route...</p>}
 
         {distanceKm !== null && !loadingDistance && (
           <div className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between ${

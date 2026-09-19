@@ -7,6 +7,7 @@ import OrderModal from '@/components/OrderModal';
 import Navbar from '@/components/Navbar';
 import Promos from '@/components/Promos';
 import Contact from '@/components/Contact';
+import About from '@/components/About';
 
 export default function Home() {
   return (
@@ -15,6 +16,7 @@ export default function Home() {
       <Hero />
       <Promos />
       <MenuGrid />
+      <About />
       <Contact />
       <CartBar />
 

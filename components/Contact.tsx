@@ -1,6 +1,14 @@
 'use client';
 
+// Replace these with the exact coordinates you copied from Google Maps
+const RESTAURANT_LAT = 6.846774688210291;
+const RESTAURANT_LNG = 80.0459768963285;
+
 export default function Contact() {
+  // Construct precise URL formats
+  const mapEmbedUrl = `https://www.google.com/maps?q=${RESTAURANT_LAT},${RESTAURANT_LNG}&hl=en&z=17&output=embed`;
+  const mapDirectionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${RESTAURANT_LAT},${RESTAURANT_LNG}`;
+
   return (
     <section id="contact" className="py-20 bg-[#0d0d0d] text-white border-t border-[#222222]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -87,7 +95,7 @@ export default function Contact() {
               <div className="relative w-full h-72 rounded-xl overflow-hidden border border-[#292929]">
                 <iframe
                   className="w-full h-full border-0 grayscale-[0.2]"
-                  src="https://www.google.com/maps?q=25%2FA%20School%20Lane%2C%20Niwanthidiya%2C%20Piliyandala&output=embed"
+                  src={mapEmbedUrl}
                   loading="lazy"
                   referrerPolicy="no-referrer-when-downgrade"
                   title="DinuTharu Location Map"
@@ -98,7 +106,7 @@ export default function Contact() {
             {/* Platform Shortcuts */}
             <div className="flex flex-wrap gap-3 mt-6">
               <a
-                href="https://www.google.com/maps/search/?api=1&query=25%2FA%20School%20Lane%2C%20Niwanthidiya%2C%20Piliyandala"
+                href={mapDirectionsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex-1 min-w-[140px] text-center px-4 py-3 bg-[#ffbd18] text-[#070707] font-black text-xs uppercase tracking-wider rounded-xl hover:bg-[#e0a410] transition-all"
