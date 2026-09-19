@@ -8,7 +8,13 @@ import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/store/useCartStore';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/authContext';
-import { getGuestDeviceId, getSavedCustomerProfile, saveCustomerProfile } from '@/lib/customerIdentity';
+import { 
+  getGuestDeviceId, 
+  saveCustomerProfile, 
+  getCustomerProfile, 
+  syncUserProfile, 
+  claimGuestOrders 
+} from '@/lib/customerIdentity';
 import AuthModal from '@/components/AuthModal';
 import type LocationPickerModalType from '@/components/LocationPickerModal';
 
@@ -51,21 +57,26 @@ export default function CheckoutPage() {
   useEffect(() => {
     setIsMounted(true);
 
-    if (user?.user_metadata?.full_name) {
-      setCustomerName(user.user_metadata.full_name);
-    }
+    async function loadProfile() {
+      // Priority 1: Supabase Account Data (for authenticated users)
+      // Priority 2: Local Storage Cache (for unauthenticated guests)
+      const profile = await getCustomerProfile(user?.id);
 
-    const savedProfile = getSavedCustomerProfile();
-    if (savedProfile) {
-      if (!customerName && savedProfile.name) setCustomerName(savedProfile.name);
-      if (savedProfile.phone) setPhoneNumber(savedProfile.phone);
-      if (savedProfile.address) setAddress(savedProfile.address);
-      if (savedProfile.lat && savedProfile.lng) {
-        setSelectedLat(savedProfile.lat);
-        setSelectedLng(savedProfile.lng);
-        setLocationSelected(true);
+      if (profile) {
+        if (profile.name) setCustomerName(profile.name);
+        if (profile.phone) setPhoneNumber(profile.phone);
+        if (profile.address) setAddress(profile.address);
+        if (profile.lat && profile.lng) {
+          setSelectedLat(profile.lat);
+          setSelectedLng(profile.lng);
+          setLocationSelected(true);
+        }
+      } else if (user?.user_metadata?.full_name) {
+        setCustomerName(user.user_metadata.full_name);
       }
     }
+
+    loadProfile();
   }, [user]);
 
   const getMinPickupTime = () => {
@@ -110,14 +121,21 @@ export default function CheckoutPage() {
       const orderCode = Math.floor(1000 + Math.random() * 9000);
       const guestDeviceId = getGuestDeviceId();
 
-      // 1. Save profile details locally for future checkout auto-fill
-      saveCustomerProfile({
+      const profilePayload = {
         name: customerName,
         phone: phoneNumber,
         address: deliveryType === 'delivery' ? address : undefined,
         lat: selectedLat || undefined,
         lng: selectedLng || undefined,
-      });
+      };
+
+      // 1. Sync Profile Information (Database priority if logged in, local storage backup)
+      if (user?.id) {
+        await syncUserProfile(user.id, profilePayload);
+        await claimGuestOrders(user.id, phoneNumber);
+      } else {
+        saveCustomerProfile(profilePayload);
+      }
 
       // 2. Build insertion payload
       const orderData: Record<string, any> = {

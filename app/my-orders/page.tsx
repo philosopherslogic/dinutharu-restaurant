@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
-import { getGuestDeviceId } from '@/lib/customerIdentity';
+import { useAuth } from '@/lib/authContext';
+import { getGuestDeviceId, claimGuestOrders } from '@/lib/customerIdentity';
 
 interface Order {
   id: string;
@@ -24,15 +25,25 @@ const STATUS_STEPS = [
 ];
 
 export default function MyOrdersPage() {
+  const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<'upcoming' | 'completed' | 'cancelled'>('upcoming');
 
   useEffect(() => {
     const deviceId = getGuestDeviceId();
-    fetchCustomerOrders(deviceId);
 
-    // Subscribe to Realtime order status updates for this customer
+    // 1. Fetch Orders and claim guest orders if authenticated
+    async function initOrders() {
+      if (user?.id) {
+        await claimGuestOrders(user.id, user.user_metadata?.phone);
+      }
+      await fetchCustomerOrders(deviceId, user?.id);
+    }
+
+    initOrders();
+
+    // 2. Subscribe to Realtime order status updates
     const channel = supabase
       .channel('customer-orders-realtime')
       .on(
@@ -48,25 +59,33 @@ export default function MyOrdersPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [user]);
 
-  async function fetchCustomerOrders(deviceId: string) {
+  async function fetchCustomerOrders(deviceId: string, userId?: string) {
     setLoading(true);
-    const { data } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('guest_device_id', deviceId)
-      .order('created_at', { ascending: false });
 
-    if (data) {
+    let query = supabase.from('orders').select('*');
+
+    if (userId) {
+      // Query by user_id OR guest_device_id
+      query = query.or(`user_id.eq.${userId},guest_device_id.eq.${deviceId}`);
+    } else {
+      // Unauthenticated Guest: Query by guest_device_id
+      query = query.eq('guest_device_id', deviceId);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+
+    if (data && !error) {
       setOrders(data);
-      
+
       // Auto-switch tab if no upcoming orders exist
       const hasUpcoming = data.some((o) => ['pending', 'accepted', 'preparing', 'in_delivery'].includes(o.status));
       if (!hasUpcoming && data.length > 0) {
         setActiveCategory('completed');
       }
     }
+
     setLoading(false);
   }
 
@@ -104,7 +123,7 @@ export default function MyOrdersPage() {
           </Link>
         </div>
 
-        {/* Category Tabs (Mobile & Desktop Responsive) */}
+        {/* Category Tabs */}
         <div className="flex items-center gap-2 sm:gap-4 border-b border-[#222222] pb-4 overflow-x-auto no-scrollbar">
           <button
             onClick={() => setActiveCategory('upcoming')}
@@ -187,7 +206,7 @@ export default function MyOrdersPage() {
                   key={order.id}
                   className="bg-[#121212] border border-[#222222] hover:border-[#ffbd18]/40 transition-all rounded-3xl p-6 space-y-6 shadow-2xl flex flex-col justify-between"
                 >
-                  {/* Order Top Card Header */}
+                  {/* Order Card Header */}
                   <div className="flex justify-between items-start border-b border-[#1f1f1f] pb-4">
                     <div>
                       <h3 className="font-black text-[#ffbd18] text-xl tracking-tight">
@@ -215,8 +234,6 @@ export default function MyOrdersPage() {
                   ) : (
                     <div className="py-2">
                       <div className="grid grid-cols-5 gap-1 text-center relative">
-                        
-                        {/* Connecting Background Progress Line */}
                         <div className="absolute top-5 left-6 right-6 h-1 bg-[#1a1a1a] z-0 -translate-y-1/2" />
                         
                         {STATUS_STEPS.map((step, idx) => {

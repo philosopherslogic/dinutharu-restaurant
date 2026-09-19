@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { claimGuestOrders, getSavedCustomerProfile } from '@/lib/customerIdentity';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -24,34 +25,50 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setErrorMsg(null);
 
     try {
+      let authUserId: string | null = null;
+      const savedProfile = getSavedCustomerProfile();
+
       if (isSignUp) {
-        // Creates account and logs in immediately (no verification email needed)
+        // Creates account and logs in immediately
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: { full_name: fullName },
+            data: { 
+              full_name: fullName,
+              phone: savedProfile?.phone || undefined,
+              address: savedProfile?.address || undefined,
+            },
           },
         });
 
         if (error) throw error;
 
-        // If automatic login didn't trigger session instantly, fall back to password sign-in
+        authUserId = data.user?.id || null;
+
+        // Fallback sign-in if automatic login session didn't trigger instantly
         if (!data.session) {
-          const { error: signInErr } = await supabase.auth.signInWithPassword({
+          const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
             email,
             password,
           });
           if (signInErr) throw signInErr;
+          authUserId = signInData.user?.id || authUserId;
         }
 
         alert('Account created and signed in successfully!');
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
+        authUserId = data.user?.id || null;
+      }
+
+      // Claim all prior guest orders and attach them to this user's account
+      if (authUserId) {
+        await claimGuestOrders(authUserId, savedProfile?.phone);
       }
 
       onClose();
