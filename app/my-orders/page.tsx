@@ -78,12 +78,6 @@ export default function MyOrdersPage() {
 
     if (data && !error) {
       setOrders(data);
-
-      // Auto-switch tab if no upcoming orders exist
-      const hasUpcoming = data.some((o) => ['pending', 'accepted', 'preparing', 'in_delivery'].includes(o.status));
-      if (!hasUpcoming && data.length > 0) {
-        setActiveCategory('completed');
-      }
     }
 
     setLoading(false);
@@ -125,6 +119,8 @@ export default function MyOrdersPage() {
 
         {/* Category Tabs */}
         <div className="flex items-center gap-2 sm:gap-4 border-b border-[#222222] pb-4 overflow-x-auto no-scrollbar">
+          
+          {/* 1. Upcoming Tab (Always Default Selected) */}
           <button
             onClick={() => setActiveCategory('upcoming')}
             className={`px-4 sm:px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 whitespace-nowrap ${
@@ -141,6 +137,20 @@ export default function MyOrdersPage() {
             </span>
           </button>
 
+          {/* 2. Go To Cart Redirect Tab */}
+          <Link
+            href="/checkout"
+            className="px-4 sm:px-5 py-2.5 rounded-2xl bg-[#121212] border border-[#2a2a2a] hover:border-[#ffbd18] text-white transition-all flex flex-col justify-center whitespace-nowrap shadow-lg group"
+          >
+            <div className="flex items-center gap-1.5 font-black text-xs uppercase tracking-wider group-hover:text-[#ffbd18] transition-colors">
+              <span>🛒 Go to Cart</span>
+            </div>
+            <span className="text-[9px] text-gray-400 font-medium tracking-normal -mt-0.5">
+              (Not ordered yet)
+            </span>
+          </Link>
+
+          {/* 3. Completed Tab */}
           <button
             onClick={() => setActiveCategory('completed')}
             className={`px-4 sm:px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 whitespace-nowrap ${
@@ -157,6 +167,7 @@ export default function MyOrdersPage() {
             </span>
           </button>
 
+          {/* 4. Cancelled Tab */}
           <button
             onClick={() => setActiveCategory('cancelled')}
             className={`px-4 sm:px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 whitespace-nowrap ${

@@ -48,7 +48,7 @@ export default function CheckoutPage() {
   const [isClosedModalOpen, setIsClosedModalOpen] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  const { cart = [], updateQuantity, clearCart, getTotalPrice } = useCartStore();
+  const { cart = [], updateQuantity, removeFromCart, clearCart, getTotalPrice } = useCartStore();
   const subtotalPrice = getTotalPrice ? getTotalPrice() : 0;
   
   // Dynamic Delivery Fee Scale: LKR 100 for <= 0.5km, scaling up to LKR 350 at 5km
@@ -253,22 +253,54 @@ export default function CheckoutPage() {
                   const itemTitle = item.title || (item as any).name || 'Food Item';
                   const itemImage = item.image_url || (item as any).image;
                   return (
-                    <div key={item.id} className="flex items-center justify-between bg-[#070707] p-3 rounded-xl border border-[#1f1f1f]">
-                      <div className="flex items-center gap-3">
+                    <div key={item.id} className="flex items-center justify-between bg-[#070707] p-3 rounded-xl border border-[#1f1f1f] gap-2">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-[#121212] flex-shrink-0">
                           {itemImage && <Image src={itemImage} alt={itemTitle} fill className="object-cover" />}
                         </div>
-                        <div>
-                          <h3 className="font-bold text-sm text-white">{itemTitle}</h3>
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-sm text-white truncate">{itemTitle}</h3>
                           <p className="text-xs text-[#ffbd18] font-semibold mt-0.5">
                             LKR {item.price} × {item.quantity} = LKR {item.price * item.quantity}
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => updateQuantity(item.id, -1)} className="w-7 h-7 bg-[#181818] border border-[#333] hover:border-[#ffbd18] rounded-lg text-white font-bold flex items-center justify-center text-sm">-</button>
-                        <span className="text-sm font-bold w-4 text-center">{item.quantity}</span>
-                        <button type="button" onClick={() => updateQuantity(item.id, 1)} className="w-7 h-7 bg-[#181818] border border-[#333] hover:border-[#ffbd18] rounded-lg text-white font-bold flex items-center justify-center text-sm">+</button>
+
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {/* Quantity Stepper */}
+                        <div className="flex items-center gap-1 bg-[#121212] p-1 rounded-lg border border-[#222]">
+                          <button 
+                            type="button" 
+                            onClick={() => updateQuantity(item.id, -1)} 
+                            className="w-6 h-6 bg-[#181818] border border-[#333] hover:border-[#ffbd18] rounded text-white font-bold flex items-center justify-center text-xs transition-colors"
+                          >
+                            -
+                          </button>
+                          <span className="text-xs font-bold w-5 text-center">{item.quantity}</span>
+                          <button 
+                            type="button" 
+                            onClick={() => updateQuantity(item.id, 1)} 
+                            className="w-6 h-6 bg-[#181818] border border-[#333] hover:border-[#ffbd18] rounded text-white font-bold flex items-center justify-center text-xs transition-colors"
+                          >
+                            +
+                          </button>
+                        </div>
+
+                        {/* Explicit Remove / Trash Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (removeFromCart) {
+                              removeFromCart(item.id);
+                            } else {
+                              updateQuantity(item.id, -item.quantity);
+                            }
+                          }}
+                          title="Remove item"
+                          className="w-8 h-8 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500 rounded-lg text-red-400 hover:text-red-300 flex items-center justify-center transition-all text-sm"
+                        >
+                          🗑️
+                        </button>
                       </div>
                     </div>
                   );
