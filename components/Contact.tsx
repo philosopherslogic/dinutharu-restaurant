@@ -1,8 +1,8 @@
 'use client';
 
 // Replace these with the exact coordinates you copied from Google Maps
-const RESTAURANT_LAT = 6.846774688210291;
-const RESTAURANT_LNG = 80.0459768963285;
+const RESTAURANT_LAT = 6.8221006502870924;
+const RESTAURANT_LNG = 79.92155467055221;
 
 export default function Contact() {
   // Construct precise URL formats

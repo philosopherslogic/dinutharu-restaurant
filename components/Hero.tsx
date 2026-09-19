@@ -118,7 +118,7 @@ export default function Hero() {
           <div className="pt-8 grid grid-cols-3 gap-4 sm:gap-8 border-t border-[#222222]/80 w-full max-w-lg backdrop-blur-sm">
             <div className="text-center">
               <p className="text-[#ffbd18] font-black text-lg sm:text-2xl">100%</p>
-              <p className="text-[9px] sm:text-xs text-gray-300 uppercase font-extrabold tracking-wider mt-0.5">Fresh Wok Sear</p>
+              <p className="text-[9px] sm:text-xs text-gray-300 uppercase font-extrabold tracking-wider mt-0.5">Fresh Ingredients</p>
             </div>
             <div className="text-center border-l border-[#222222] pl-4 sm:pl-8">
               <p className="text-white font-black text-lg sm:text-2xl">&lt; 30 Mins</p>

@@ -40,7 +40,12 @@ export default function CheckoutPage() {
 
   const { cart = [], updateQuantity, clearCart, getTotalPrice } = useCartStore();
   const subtotalPrice = getTotalPrice ? getTotalPrice() : 0;
-  const deliveryFee = locationSelected && distanceKm !== null ? Math.ceil(distanceKm) * 100 : 0;
+  
+  // Dynamic Delivery Fee Scale: LKR 100 for <= 0.5km, scaling up to LKR 350 at 5km
+  const deliveryFee = deliveryType === 'delivery' && locationSelected && distanceKm !== null && distanceKm <= 5
+    ? (distanceKm <= 0.5 ? 100 : Math.round((100 + ((distanceKm - 0.5) / 4.5) * 250) / 5) * 5)
+    : 0;
+    
   const finalTotalPrice = subtotalPrice + deliveryFee;
 
   useEffect(() => {
@@ -244,7 +249,11 @@ export default function CheckoutPage() {
                 <div className="flex justify-between text-xs text-gray-400">
                   <span>Delivery Charge</span>
                   <span className="text-white font-bold">
-                    {deliveryType === 'pickup' ? 'LKR 0 (Pickup)' : locationSelected && distanceKm !== null ? `LKR ${deliveryFee} (${distanceKm.toFixed(1)} km)` : 'Select location to get delivery fee'}
+                    {deliveryType === 'pickup' 
+                      ? 'LKR 0 (Pickup)' 
+                      : locationSelected && distanceKm !== null 
+                        ? `LKR ${deliveryFee} (${distanceKm.toFixed(2)} km)` 
+                        : 'Select location to get delivery fee'}
                   </span>
                 </div>
                 <div className="flex justify-between text-base font-black text-[#ffbd18] pt-2 border-t border-[#1f1f1f]">
@@ -326,7 +335,7 @@ export default function CheckoutPage() {
                       className={`w-full py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all flex items-center justify-center gap-2 ${locationSelected && distanceKm !== null ? 'bg-green-500/10 border-green-500 text-green-400' : 'bg-[#181818] border-[#292929] text-[#ffbd18] hover:border-[#ffbd18]'}`}
                     >
                       <span>📍</span>
-                      <span>{locationSelected && distanceKm !== null ? `Location Confirmed (${distanceKm.toFixed(1)} km away)` : 'Select Location on Map'}</span>
+                      <span>{locationSelected && distanceKm !== null ? `Location Confirmed (${distanceKm.toFixed(2)} km away)` : 'Select Location on Map'}</span>
                     </button>
                   </div>
 

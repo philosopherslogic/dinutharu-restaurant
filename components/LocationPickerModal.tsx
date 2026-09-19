@@ -6,8 +6,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { getSavedCustomerProfile } from '@/lib/customerIdentity';
 
-// Update these to your exact copied coordinates from Google Maps
-const RESTAURANT_COORDS: [number, number] = [6.8018, 79.9227];
+// Restaurant Location Coordinates (Niwanthidiya / Piliyandala)
+const RESTAURANT_COORDS: [number, number] = [6.8221006502870924, 79.92155467055221];
 
 // Custom Red Store Marker with Restaurant Icon
 const restaurantIcon = L.divIcon({
@@ -32,7 +32,7 @@ const restaurantIcon = L.divIcon({
   iconAnchor: [19, 38],
 });
 
-// Custom Gold/Amber Customer Delivery Marker with Home/User Icon
+// Custom Gold/Amber Customer Delivery Marker
 const customerIcon = L.divIcon({
   className: 'custom-customer-pin',
   html: `
@@ -283,15 +283,19 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
           </MapContainer>
         </div>
 
-        {/* Distance Info */}
+        {/* Distance Info & Dynamic Scaled Fee Display */}
         {loadingDistance && <p className="text-xs text-gray-400 animate-pulse">Calculating road route...</p>}
 
         {distanceKm !== null && !loadingDistance && (
           <div className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between ${
             distanceKm <= 5 ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400'
           }`}>
-            <span>Road Distance: {distanceKm.toFixed(1)} km</span>
-            <span>{distanceKm <= 5 ? `Est. Delivery Fee: LKR ${Math.ceil(distanceKm) * 100}` : 'Out of delivery range'}</span>
+            <span>Road Distance: {distanceKm.toFixed(2)} km</span>
+            <span>
+              {distanceKm <= 5 
+                ? `Est. Delivery Fee: LKR ${distanceKm <= 0.5 ? 100 : Math.round((100 + ((distanceKm - 0.5) / 4.5) * 250) / 5) * 5}` 
+                : 'Out of delivery range'}
+            </span>
           </div>
         )}
 
