@@ -135,30 +135,31 @@ export default function MenuGrid() {
                 }`}
               >
                 <div>
-                  {/* Image Container */}
-                  <div className="relative w-full h-60 bg-[#000] overflow-hidden">
+                  {/* Aspect-Square Responsive Image Container */}
+                  <div className="relative w-full aspect-square bg-[#0a0a0a] overflow-hidden">
                     <Image
                       src={item.image || '/logo.jpg'}
                       alt={item.title}
                       fill
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                       className={`object-cover transition-transform duration-700 ease-out ${
-                        item.isAvailable ? 'group-hover:scale-110' : 'grayscale'
+                        item.isAvailable ? 'group-hover:scale-105' : 'grayscale'
                       }`}
                     />
                     
-                    {/* Dark Bottom Fade Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#080808] via-transparent to-transparent opacity-90" />
+                    {/* Soft Dark Bottom Gradient */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#080808] via-transparent to-transparent opacity-80 pointer-events-none" />
 
                     {/* Popular Badge */}
                     {item.isPopular && item.isAvailable && (
-                      <span className="absolute top-4 right-4 bg-gradient-to-r from-[#ffbd18] to-amber-500 text-[#070707] text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg border border-[#ffbd18]/50 flex items-center gap-1">
+                      <span className="absolute top-4 right-4 bg-gradient-to-r from-[#ffbd18] to-amber-500 text-[#070707] text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg border border-[#ffbd18]/50 flex items-center gap-1 z-10">
                         <span>🔥</span> Popular
                       </span>
                     )}
 
                     {/* Sold Out Overlay Badge */}
                     {!item.isAvailable && (
-                      <span className="absolute top-4 left-4 bg-gradient-to-r from-red-600 to-red-800 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg border border-red-500/50">
+                      <span className="absolute top-4 left-4 bg-gradient-to-r from-red-600 to-red-800 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg border border-red-500/50 z-10">
                         Out of Stock
                       </span>
                     )}
