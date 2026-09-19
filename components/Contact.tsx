@@ -78,7 +78,7 @@ export default function Contact() {
                   Order Platforms
                 </b>
                 <span className="text-gray-300 text-sm">
-                  Direct WhatsApp Order • PickMe • Uber Eats
+                  •Restaurant Takeaway • Order from Website(Dinutharu Delivery) • PickMe • Uber Eats
                 </span>
               </div>
             </div>
