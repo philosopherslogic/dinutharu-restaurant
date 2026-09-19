@@ -21,7 +21,7 @@ export default function Hero() {
   const currentHighlight = ROTATING_HIGHLIGHTS[highlightIdx];
 
   return (
-    <header id="home" className="relative min-h-[100dvh] pt-28 pb-16 flex items-center justify-center bg-[#070707] overflow-hidden">
+    <header id="home" className="relative min-h-screen pt-28 pb-20 md:pb-24 flex flex-col justify-center items-center bg-[#070707] overflow-hidden">
       
       {/* 1. Background Video & Soft Ambient Masks */}
       <div className="absolute inset-0 z-0">
@@ -49,7 +49,7 @@ export default function Hero() {
       {/* 2. Hero Content Container */}
       <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 w-full text-center">
         
-        <div className="space-y-8 flex flex-col items-center">
+        <div className="space-y-6 sm:space-y-8 flex flex-col items-center">
           
           {/* Live Operational Status + Cycling Feature Badge */}
           <div className="inline-flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 bg-[#121212]/90 border border-[#2a2a2a] px-4 sm:px-5 py-2 rounded-full shadow-2xl backdrop-blur-md">
@@ -71,11 +71,8 @@ export default function Hero() {
 
           {/* Alive Brand Title */}
           <div className="space-y-1 drop-shadow-2xl relative">
-            
-            {/* Floating Sparkle Accents */}
-
             <h1 className="text-5xl sm:text-7xl lg:text-8xl font-black text-white tracking-tight leading-[1.02]">
-              Dinu
+              Dinu{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ffbd18] via-amber-200 to-[#e52a20] animate-pulse">
                 Tharu
               </span>
@@ -85,7 +82,7 @@ export default function Hero() {
             </p>
           </div>
 
-          {/* Concise Alive Description */}
+          {/* Concise Description */}
           <p className="text-gray-200 text-sm sm:text-lg lg:text-xl max-w-2xl leading-relaxed font-medium drop-shadow-md">
             Generous portions, vibrant local spices, and unbeatable hot-pan flavor prepared fresh to order. Fast direct delivery to{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ffbd18] to-amber-200 font-black">
@@ -111,17 +108,17 @@ export default function Hero() {
           </div>
 
           {/* Micro Highlights Bar */}
-          <div className="pt-8 grid grid-cols-3 gap-4 sm:gap-8 border-t border-[#222222]/80 w-full max-w-lg backdrop-blur-sm">
+          <div className="pt-6 sm:pt-8 grid grid-cols-3 gap-4 sm:gap-8 border-t border-[#222222]/80 w-full max-w-xl backdrop-blur-sm">
             <div className="text-center">
-              <p className="text-[#ffbd18] font-black text-lg sm:text-2xl">100%</p>
+              <p className="text-[#ffbd18] font-black text-lg sm:text-2xl whitespace-nowrap">100%</p>
               <p className="text-[9px] sm:text-xs text-gray-300 uppercase font-extrabold tracking-wider mt-0.5">Fresh Ingredients</p>
             </div>
             <div className="text-center border-l border-[#222222] pl-4 sm:pl-8">
-              <p className="text-white font-black text-lg sm:text-2xl">&lt; 30 Mins</p>
+              <p className="text-white font-black text-lg sm:text-2xl whitespace-nowrap">&lt; 30 Mins</p>
               <p className="text-[9px] sm:text-xs text-gray-300 uppercase font-extrabold tracking-wider mt-0.5">Avg Delivery</p>
             </div>
             <div className="text-center border-l border-[#222222] pl-4 sm:pl-8">
-              <p className="text-[#ffbd18] font-black text-lg sm:text-2xl">5.0 ★</p>
+              <p className="text-[#ffbd18] font-black text-lg sm:text-2xl whitespace-nowrap">5.0 ★</p>
               <p className="text-[9px] sm:text-xs text-gray-300 uppercase font-extrabold tracking-wider mt-0.5">Taste Rating</p>
             </div>
           </div>
@@ -130,11 +127,11 @@ export default function Hero() {
 
       </div>
 
-      {/* 3. Floating Scroll Down Pill */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 hidden sm:flex flex-col items-center gap-2 opacity-80 hover:opacity-100 transition-opacity">
+      {/* 3. Non-Overlapping Scroll Down Indicator */}
+      <div className="relative z-10 pt-8 hidden sm:flex flex-col items-center gap-2 opacity-80 hover:opacity-100 transition-opacity">
         <Link href="#menu" className="flex flex-col items-center gap-1">
           <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest">Scroll Down</span>
-          <div className="w-5 h-9 rounded-full border-2 border-gray-400 flex justify-center p-1 backdrop-blur-sm">
+          <div className="w-5 h-8 rounded-full border-2 border-gray-400 flex justify-center p-1 backdrop-blur-sm">
             <div className="w-1 h-2 bg-[#ffbd18] rounded-full animate-bounce" />
           </div>
         </Link>
