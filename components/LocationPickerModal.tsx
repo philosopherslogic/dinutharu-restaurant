@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { getSavedCustomerProfile } from '@/lib/customerIdentity';
 
 // Fix default Leaflet marker icon issue in Next.js
 const customIcon = new L.Icon({
@@ -113,10 +114,19 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
     );
   };
 
-  // Trigger GPS detection immediately when modal opens
+  // Smart Initialization on Modal Open: Restore Saved Pin or fallback to GPS
   useEffect(() => {
     if (isOpen) {
-      requestGPSLocation();
+      const savedProfile = getSavedCustomerProfile();
+      
+      // If customer already has a saved pin from a previous order, use it!
+      if (savedProfile && savedProfile.lat && savedProfile.lng) {
+        setSelectedLat(savedProfile.lat);
+        setSelectedLng(savedProfile.lng);
+      } else if (selectedLat === null || selectedLng === null) {
+        // Only request fresh GPS if no saved pin exists and state is empty
+        requestGPSLocation();
+      }
     }
   }, [isOpen]);
 

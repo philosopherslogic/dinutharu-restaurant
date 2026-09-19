@@ -41,7 +41,7 @@ interface Order {
   notes?: string;
   items: Array<{ title?: string; name?: string; quantity: number; price: number }>;
   total_price: number;
-  status: 'pending' | 'completed' | 'cancelled';
+  status: 'pending' | 'accepted' | 'preparing' | 'in_delivery' | 'completed' | 'cancelled';
   created_at: string;
 }
 
@@ -77,11 +77,9 @@ export default function AdminDashboard() {
 
   // 1. Initialize Local Alert Audio & Unlock Browser Audio Policy
   useEffect(() => {
-    // Load local audio file placed in public/alert.mp3
     audioRef.current = new Audio('/alert.mp3');
     audioRef.current.loop = true;
 
-    // Unlock browser audio policy on first user click on the admin page
     const unlockAudio = () => {
       if (audioRef.current) {
         audioRef.current.play().then(() => {
@@ -126,7 +124,7 @@ export default function AdminDashboard() {
           const newOrder = payload.new as Order;
           setOrders((prevOrders) => [newOrder, ...prevOrders]);
           
-          // Ring phone alert on new order arrival
+          // Ring alarm on new order arrival
           playRingtone();
         }
       )
@@ -171,7 +169,7 @@ export default function AdminDashboard() {
 
   async function fetchSettings() {
     try {
-      const { data, error } = await supabase.from('store_settings').select('*').limit(1).maybeSingle();
+      const { data } = await supabase.from('store_settings').select('*').limit(1).maybeSingle();
       if (data) {
         setDirectDeliveryEnabled(data.direct_delivery_enabled ?? true);
         setUbereatsEnabled(data.ubereats_enabled ?? true);
@@ -193,11 +191,15 @@ export default function AdminDashboard() {
     return '#';
   };
 
-  async function markOrderCompleted(id: string) {
+  // Multistage Order Status Updater
+  async function updateOrderStatus(id: string, newStatus: Order['status']) {
     stopRingtone();
-    const { error } = await supabase.from('orders').update({ status: 'completed' }).eq('id', id);
+    const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', id);
     if (!error) {
-      setOrders(orders.map((o) => (o.id === id ? { ...o, status: 'completed' } : o)));
+      setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: newStatus } : o)));
+    } else {
+      console.error('Failed to update status:', error);
+      alert('Could not update status. Ensure SQL Enum includes this status value.');
     }
   }
 
@@ -306,6 +308,18 @@ export default function AdminDashboard() {
     }
   }
 
+  const getStatusBadgeColor = (status: Order['status']) => {
+    switch (status) {
+      case 'pending': return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+      case 'accepted': return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+      case 'preparing': return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+      case 'in_delivery': return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20';
+      case 'completed': return 'bg-green-500/10 text-green-400 border-green-500/20';
+      case 'cancelled': return 'bg-red-500/10 text-red-400 border-red-500/20';
+      default: return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#070707] text-white flex flex-col md:flex-row">
       {/* Sidebar Navigation */}
@@ -356,7 +370,7 @@ export default function AdminDashboard() {
       {/* Main Workspace */}
       <main className="flex-1 p-6 md:p-10 max-w-6xl">
         
-        {/* Incoming Call Ringing Alert Bar (Active Across All Tabs) */}
+        {/* Incoming Call Ringing Alert Bar */}
         {isRinging && (
           <div className="mb-6 p-4 bg-red-600 animate-bounce rounded-2xl flex items-center justify-between shadow-2xl text-white">
             <div className="flex items-center gap-3">
@@ -370,7 +384,7 @@ export default function AdminDashboard() {
               onClick={stopRingtone}
               className="px-6 py-2.5 bg-black text-amber-400 font-black text-xs uppercase rounded-xl hover:bg-gray-900 shadow-lg"
             >
-              🔕 Accept & Stop Sound
+              🔕 Stop Sound
             </button>
           </div>
         )}
@@ -400,8 +414,8 @@ export default function AdminDashboard() {
                           
                           <div className="flex items-center gap-3">
                             <span className="font-black text-lg text-[#ffbd18]">#{order.order_code || 'ORD'}</span>
-                            <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${order.status === 'pending' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-green-500/10 text-green-400 border border-green-500/20'}`}>
-                              {order.status}
+                            <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full border ${getStatusBadgeColor(order.status)}`}>
+                              {order.status.replace('_', ' ')}
                             </span>
                             <span className="text-[11px] text-gray-500">
                               {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -456,26 +470,71 @@ export default function AdminDashboard() {
 
                         </div>
 
+                        {/* Action Buttons Column */}
                         <div className="flex flex-col gap-2 min-w-[200px]">
                           {order.delivery_type === 'delivery' && (
                             <a
                               href={getGoogleMapsDirectionsUrl(order)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="w-full py-3 px-4 bg-[#181818] border border-[#292929] hover:border-green-500 text-green-400 hover:text-white text-xs font-bold uppercase rounded-xl transition-all flex items-center justify-center gap-2 shadow-md"
+                              className="w-full py-2.5 px-4 bg-[#181818] border border-[#292929] hover:border-green-500 text-green-400 hover:text-white text-xs font-bold uppercase rounded-xl transition-all flex items-center justify-center gap-2 shadow-md mb-2"
                             >
                               <span>📍</span>
-                              <span>Open in Google Maps</span>
+                              <span>Open in Maps</span>
                             </a>
                           )}
 
+                          {/* Multistage Order Lifecycle Actions */}
                           {order.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={() => updateOrderStatus(order.id, 'accepted')}
+                                className="w-full py-3 bg-[#20c45a] hover:bg-[#1bb050] text-white font-black text-xs uppercase rounded-xl transition-all shadow-lg"
+                              >
+                                ✓ Accept Order
+                              </button>
+                              <button
+                                onClick={() => updateOrderStatus(order.id, 'cancelled')}
+                                className="w-full py-2 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/30 text-xs font-bold uppercase rounded-xl transition-all"
+                              >
+                                ✕ Decline Order
+                              </button>
+                            </>
+                          )}
+
+                          {order.status === 'accepted' && (
                             <button
-                              onClick={() => markOrderCompleted(order.id)}
-                              className="w-full py-3 px-4 bg-[#20c45a] hover:bg-[#1bb050] text-white font-black text-xs uppercase rounded-xl transition-all shadow-lg flex items-center justify-center gap-1.5"
+                              onClick={() => updateOrderStatus(order.id, 'preparing')}
+                              className="w-full py-3 bg-[#ffbd18] hover:bg-[#e0a410] text-[#070707] font-black text-xs uppercase rounded-xl transition-all shadow-lg"
                             >
-                              <span>✓</span>
-                              <span>Complete Order</span>
+                              👨‍🍳 Set to "Preparing"
+                            </button>
+                          )}
+
+                          {order.status === 'preparing' && (
+                            <button
+                              onClick={() => updateOrderStatus(order.id, 'in_delivery')}
+                              className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-black text-xs uppercase rounded-xl transition-all shadow-lg"
+                            >
+                              🛵 Set to "In Delivery"
+                            </button>
+                          )}
+
+                          {order.status === 'in_delivery' && (
+                            <button
+                              onClick={() => updateOrderStatus(order.id, 'completed')}
+                              className="w-full py-3 bg-green-500 hover:bg-green-600 text-black font-black text-xs uppercase rounded-xl transition-all shadow-lg"
+                            >
+                              🎉 Mark as "Completed"
+                            </button>
+                          )}
+
+                          {order.status !== 'completed' && order.status !== 'cancelled' && order.status !== 'pending' && (
+                            <button
+                              onClick={() => updateOrderStatus(order.id, 'cancelled')}
+                              className="w-full py-1.5 text-[11px] text-red-400 hover:underline font-bold uppercase mt-1 text-center"
+                            >
+                              Cancel Order
                             </button>
                           )}
                         </div>
