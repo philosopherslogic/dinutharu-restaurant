@@ -265,7 +265,7 @@ export default function OrderModal() {
                       : 'text-gray-500 line-through'
                   }`}
                 >
-                  Order Direct (Fastest)
+                  Dimutharu Delivery OR Pickup
                 </p>
                 <p
                   className={`text-[11px] ${
