@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 const ROTATING_HIGHLIGHTS = [
-  { text: '3.00PM - 8.00PM', icon: '🍲', color: 'from-[#ffbd18] to-amber-400' }
+  { text: '3.30PM - 12.30AM', icon: '🍲', color: 'from-[#ffbd18] to-amber-400' }
 ];
 
 export default function Hero() {
@@ -58,7 +58,7 @@ export default function Hero() {
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
             </span>
             <span className="text-gray-300 text-[10px] sm:text-xs font-black uppercase tracking-wider">
-              Kitchen Open
+              Opens AT
             </span>
             <span className="text-[#333]">|</span>
             <div key={currentHighlight.text} className="flex items-center gap-1.5 animate-fadeIn">

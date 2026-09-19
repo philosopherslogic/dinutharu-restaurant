@@ -44,6 +44,10 @@ export default function CheckoutPage() {
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Closed Store Modal State
+  const [isClosedModalOpen, setIsClosedModalOpen] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+
   const { cart = [], updateQuantity, clearCart, getTotalPrice } = useCartStore();
   const subtotalPrice = getTotalPrice ? getTotalPrice() : 0;
   
@@ -58,8 +62,6 @@ export default function CheckoutPage() {
     setIsMounted(true);
 
     async function loadProfile() {
-      // Priority 1: Supabase Account Data (for authenticated users)
-      // Priority 2: Local Storage Cache (for unauthenticated guests)
       const profile = await getCustomerProfile(user?.id);
 
       if (profile) {
@@ -87,30 +89,32 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationError(null);
 
+    // 1. Validate Form Fields
     if (!customerName || !phoneNumber) {
-      alert('Please fill in required contact details.');
+      setValidationError('Please fill in your name and phone number.');
       return;
     }
 
     if (deliveryType === 'delivery') {
       if (!address || !locationSelected || distanceKm === null) {
-        alert('Please select your location on the map and enter your full delivery address.');
+        setValidationError('Please select your location on the map and enter your full address.');
         return;
       }
       if (distanceKm > 5) {
-        alert('Delivery distance exceeds our 5km service radius.');
+        setValidationError('Selected location exceeds our 5km delivery radius.');
         return;
       }
     }
 
     if (deliveryType === 'pickup') {
       if (!pickupTime) {
-        alert('Please select a pickup time.');
+        setValidationError('Please select a pickup time.');
         return;
       }
       if (pickupTime < getMinPickupTime()) {
-        alert('Pickup time must be at least 30 minutes from now.');
+        setValidationError('Pickup time must be at least 30 minutes from now.');
         return;
       }
     }
@@ -118,6 +122,19 @@ export default function CheckoutPage() {
     setIsSubmitting(true);
 
     try {
+      // 2. Check Store Open/Closed Status in Realtime from Supabase
+      const { data: settingsData } = await supabase
+        .from('store_settings')
+        .select('is_open')
+        .limit(1)
+        .maybeSingle();
+
+      if (settingsData && settingsData.is_open === false) {
+        setIsSubmitting(false);
+        setIsClosedModalOpen(true);
+        return;
+      }
+
       const orderCode = Math.floor(1000 + Math.random() * 9000);
       const guestDeviceId = getGuestDeviceId();
 
@@ -129,7 +146,7 @@ export default function CheckoutPage() {
         lng: selectedLng || undefined,
       };
 
-      // 1. Sync Profile Information (Database priority if logged in, local storage backup)
+      // 3. Sync Profile Information
       if (user?.id) {
         await syncUserProfile(user.id, profilePayload);
         await claimGuestOrders(user.id, phoneNumber);
@@ -137,7 +154,7 @@ export default function CheckoutPage() {
         saveCustomerProfile(profilePayload);
       }
 
-      // 2. Build insertion payload
+      // 4. Build Insertion Payload
       const orderData: Record<string, any> = {
         order_code: orderCode,
         customer_name: customerName,
@@ -160,21 +177,20 @@ export default function CheckoutPage() {
         orderData.user_id = user.id;
       }
 
-      // 3. Insert Order into Supabase
-      const { data, error } = await supabase.from('orders').insert([orderData]).select();
+      // 5. Insert Order into Supabase
+      const { error } = await supabase.from('orders').insert([orderData]).select();
 
       if (error) {
         console.error('Supabase Error:', error);
-        alert(`Database Error: ${error.message}`);
+        setValidationError(`Database Error: ${error.message}`);
         return;
       }
 
       clearCart();
-      alert(`Order #${orderCode} placed successfully!`);
       router.push('/my-orders');
     } catch (err: any) {
       console.error('Order Submission Error:', err);
-      alert(`Failed to place order: ${err?.message || 'Please try again.'}`);
+      setValidationError(`Failed to place order: ${err?.message || 'Please try again.'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -285,6 +301,12 @@ export default function CheckoutPage() {
             <form onSubmit={handlePlaceOrder} className="bg-[#121212] border border-[#292929] rounded-2xl p-6 space-y-4 shadow-xl">
               <h2 className="text-xl font-bold text-white pb-3 border-b border-[#222222]">Customer Details</h2>
 
+              {validationError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs font-semibold flex items-center gap-2">
+                  <span>⚠️</span> {validationError}
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-bold uppercase text-gray-300 mb-1">Full Name *</label>
                 <input
@@ -387,7 +409,7 @@ export default function CheckoutPage() {
                 disabled={isSubmitting}
                 className="w-full py-4 bg-[#ffbd18] hover:bg-[#e0a410] text-[#070707] font-black text-sm uppercase rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
               >
-                {isSubmitting ? 'Placing Order...' : 'Place Order'}
+                {isSubmitting ? 'Checking Store Status...' : 'Place Order'}
               </button>
             </form>
 
@@ -396,6 +418,7 @@ export default function CheckoutPage() {
 
       </div>
 
+      {/* LOCATION PICKER MODAL */}
       <LocationPickerModal
         isOpen={isMapOpen}
         onClose={() => setIsMapOpen(false)}
@@ -407,7 +430,42 @@ export default function CheckoutPage() {
         }}
       />
 
+      {/* AUTHENTICATION MODAL */}
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
+
+      {/* CUSTOM "RESTAURANT CLOSED" POPUP MODAL */}
+      {isClosedModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#121212] border border-[#292929] rounded-3xl p-6 md:p-8 max-w-md w-full space-y-5 text-center shadow-2xl relative animate-in fade-in zoom-in duration-200">
+            
+            <div className="w-16 h-16 bg-red-500/10 border border-red-500/30 rounded-full flex items-center justify-center mx-auto text-3xl">
+              🌙
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-xl font-black text-white uppercase tracking-wider">Restaurant Is Currently Closed</h3>
+              <p className="text-xs text-gray-300 leading-relaxed">
+                We are not taking live online orders right now. Please come back and place your order during our operating hours!
+              </p>
+            </div>
+
+            <div className="bg-[#070707] p-4 rounded-2xl border border-[#222222] space-y-1 text-xs">
+              <span className="text-[10px] font-black text-[#ffbd18] uppercase tracking-widest block">Opening Hours</span>
+              <p className="font-extrabold text-white text-base">3:30 PM – 12:30 AM</p>
+              <p className="text-[11px] text-gray-400">Daily Fresh Hot Meals</p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsClosedModalOpen(false)}
+              className="w-full py-3.5 bg-[#ffbd18] hover:bg-[#e0a410] text-[#070707] font-black text-xs uppercase rounded-xl transition-all shadow-lg"
+            >
+              Understand & Close
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

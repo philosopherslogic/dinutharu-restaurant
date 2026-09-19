@@ -9,27 +9,38 @@ import { getSavedCustomerProfile } from '@/lib/customerIdentity';
 // Restaurant Location Coordinates (Niwanthidiya / Piliyandala)
 const RESTAURANT_COORDS: [number, number] = [6.8221006502870924, 79.92155467055221];
 
-// Custom Red Store Marker with Restaurant Icon
+// Custom Red Store Marker with Restaurant Logo Image
 const restaurantIcon = L.divIcon({
   className: 'custom-restaurant-pin',
   html: `
     <div style="
       background-color: #e52a20;
-      width: 38px;
-      height: 38px;
+      width: 42px;
+      height: 42px;
       border-radius: 50% 50% 50% 0;
       transform: rotate(-45deg);
       display: flex;
       align-items: center;
       justify-content: center;
       border: 3px solid #ffffff;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+      overflow: hidden;
     ">
-      <span style="transform: rotate(45deg); font-size: 18px;">🏪</span>
+      <img 
+        src="/logo.jpg" 
+        alt="DinuTharu Logo" 
+        style="
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          object-fit: cover;
+          transform: rotate(45deg);
+        " 
+      />
     </div>
   `,
-  iconSize: [38, 38],
-  iconAnchor: [19, 38],
+  iconSize: [42, 42],
+  iconAnchor: [21, 42],
 });
 
 // Custom Gold/Amber Customer Delivery Marker
@@ -257,7 +268,7 @@ export default function LocationPickerModal({ isOpen, onClose, onConfirmLocation
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
 
-            {/* Red Restaurant Pin */}
+            {/* Red Restaurant Pin with Logo */}
             <Marker position={RESTAURANT_COORDS} icon={restaurantIcon} />
 
             {/* Gold Customer Pin */}

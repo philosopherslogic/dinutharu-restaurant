@@ -57,7 +57,8 @@ export default function AdminDashboard() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [promos, setPromos] = useState<PromoItem[]>([]);
   
-  // Delivery Toggles
+  // Delivery & Store Status Toggles
+  const [isStoreOpen, setIsStoreOpen] = useState(true);
   const [directDeliveryEnabled, setDirectDeliveryEnabled] = useState(true);
   const [ubereatsEnabled, setUbereatsEnabled] = useState(true);
   const [pickmeEnabled, setPickmeEnabled] = useState(true);
@@ -175,6 +176,7 @@ export default function AdminDashboard() {
     try {
       const { data } = await supabase.from('store_settings').select('*').limit(1).maybeSingle();
       if (data) {
+        setIsStoreOpen(data.is_open ?? true);
         setDirectDeliveryEnabled(data.direct_delivery_enabled ?? true);
         setUbereatsEnabled(data.ubereats_enabled ?? true);
         setPickmeEnabled(data.pickme_enabled ?? true);
@@ -319,21 +321,68 @@ export default function AdminDashboard() {
     }
   }
 
-  // --- Toggles Functions ---
+  // --- FIXED Store Settings Toggles (with Upsert logic) ---
+  async function toggleStoreOpen() {
+    const nextStatus = !isStoreOpen;
+    setIsStoreOpen(nextStatus); // Optimistic UI update
+
+    if (settingsId) {
+      const { error } = await supabase.from('store_settings').update({ is_open: nextStatus }).eq('id', settingsId);
+      if (error) {
+        console.error('Failed to update store open state:', error);
+        alert(`Error updating status: ${error.message}`);
+        setIsStoreOpen(!nextStatus); // revert on failure
+      }
+    } else {
+      // If store_settings table was empty, insert default row
+      const { data, error } = await supabase.from('store_settings').insert([{ is_open: nextStatus }]).select();
+      if (!error && data && data.length > 0) {
+        setSettingsId(data[0].id);
+      } else if (error) {
+        console.error('Error creating store_settings row:', error);
+        alert(`Error: ${error.message}`);
+        setIsStoreOpen(!nextStatus);
+      }
+    }
+  }
+
   async function toggleDirectDelivery() {
-    if (!settingsId) return;
-    const { error } = await supabase.from('store_settings').update({ direct_delivery_enabled: !directDeliveryEnabled }).eq('id', settingsId);
-    if (!error) setDirectDeliveryEnabled(!directDeliveryEnabled);
+    const nextStatus = !directDeliveryEnabled;
+    setDirectDeliveryEnabled(nextStatus);
+
+    if (settingsId) {
+      const { error } = await supabase.from('store_settings').update({ direct_delivery_enabled: nextStatus }).eq('id', settingsId);
+      if (error) setDirectDeliveryEnabled(!nextStatus);
+    } else {
+      const { data, error } = await supabase.from('store_settings').insert([{ direct_delivery_enabled: nextStatus }]).select();
+      if (!error && data && data.length > 0) setSettingsId(data[0].id);
+    }
   }
+
   async function toggleUberEats() {
-    if (!settingsId) return;
-    const { error } = await supabase.from('store_settings').update({ ubereats_enabled: !ubereatsEnabled }).eq('id', settingsId);
-    if (!error) setUbereatsEnabled(!ubereatsEnabled);
+    const nextStatus = !ubereatsEnabled;
+    setUbereatsEnabled(nextStatus);
+
+    if (settingsId) {
+      const { error } = await supabase.from('store_settings').update({ ubereats_enabled: nextStatus }).eq('id', settingsId);
+      if (error) setUbereatsEnabled(!nextStatus);
+    } else {
+      const { data, error } = await supabase.from('store_settings').insert([{ ubereats_enabled: nextStatus }]).select();
+      if (!error && data && data.length > 0) setSettingsId(data[0].id);
+    }
   }
+
   async function togglePickMe() {
-    if (!settingsId) return;
-    const { error } = await supabase.from('store_settings').update({ pickme_enabled: !pickmeEnabled }).eq('id', settingsId);
-    if (!error) setPickmeEnabled(!pickmeEnabled);
+    const nextStatus = !pickmeEnabled;
+    setPickmeEnabled(nextStatus);
+
+    if (settingsId) {
+      const { error } = await supabase.from('store_settings').update({ pickme_enabled: nextStatus }).eq('id', settingsId);
+      if (error) setPickmeEnabled(!nextStatus);
+    } else {
+      const { data, error } = await supabase.from('store_settings').insert([{ pickme_enabled: nextStatus }]).select();
+      if (!error && data && data.length > 0) setSettingsId(data[0].id);
+    }
   }
 
   const getStatusBadgeColor = (status: Order['status']) => {
@@ -357,7 +406,7 @@ export default function AdminDashboard() {
             <button onClick={() => setActiveTab('orders')} className={`w-full text-left px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${activeTab === 'orders' ? 'bg-[#ffbd18] text-[#070707]' : 'text-gray-400 hover:bg-[#1f1f1f]'}`}>📦 Live Orders ({orders.filter((o) => o.status === 'pending').length})</button>
             <button onClick={() => setActiveTab('menu')} className={`w-full text-left px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${activeTab === 'menu' ? 'bg-[#ffbd18] text-[#070707]' : 'text-gray-400 hover:bg-[#1f1f1f]'}`}>🍚 Menu CRUD & Stock</button>
             <button onClick={() => setActiveTab('promos')} className={`w-full text-left px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${activeTab === 'promos' ? 'bg-[#ffbd18] text-[#070707]' : 'text-gray-400 hover:bg-[#1f1f1f]'}`}>🏷️ Promos Management</button>
-            <button onClick={() => setActiveTab('settings')} className={`w-full text-left px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${activeTab === 'settings' ? 'bg-[#ffbd18] text-[#070707]' : 'text-gray-400 hover:bg-[#1f1f1f]'}`}>⚙️ Delivery Toggles</button>
+            <button onClick={() => setActiveTab('settings')} className={`w-full text-left px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${activeTab === 'settings' ? 'bg-[#ffbd18] text-[#070707]' : 'text-gray-400 hover:bg-[#1f1f1f]'}`}>⚙️ Store Controls</button>
           </nav>
         </div>
         <Link href="/" className="mt-8 text-xs text-gray-500 hover:text-white uppercase font-bold tracking-wider">← Exit to Storefront</Link>
@@ -643,17 +692,35 @@ export default function AdminDashboard() {
             {/* 4. SETTINGS TAB */}
             {activeTab === 'settings' && (
               <div className="space-y-6">
-                <h1 className="text-2xl font-black">Ordering Channel Controls</h1>
+                <h1 className="text-2xl font-black">Store Operations & Channels</h1>
                 <div className="bg-[#121212] border border-[#292929] rounded-2xl p-6 space-y-6">
                   
+                  {/* STORE OPEN / CLOSED MANUAL TOGGLE */}
+                  <div className="flex items-center justify-between pb-4 border-b border-[#222222]">
+                    <div>
+                      <h3 className="text-base font-bold text-white">Store Status (Open / Closed)</h3>
+                      <p className="text-xs text-gray-400 mt-1">When closed, checkout will block customer orders and display standard operating hours.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={toggleStoreOpen}
+                      className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer ${
+                        isStoreOpen ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'bg-[#e52a20] text-white shadow-lg shadow-red-500/20'
+                      }`}
+                    >
+                      {isStoreOpen ? 'STORE IS OPEN' : 'STORE IS CLOSED'}
+                    </button>
+                  </div>
+
                   <div className="flex items-center justify-between pb-4 border-b border-[#222222]">
                     <div>
                       <h3 className="text-base font-bold text-white">DinuTharu Direct Delivery</h3>
                       <p className="text-xs text-gray-400 mt-1">Enable or disable direct website delivery checkout.</p>
                     </div>
                     <button
+                      type="button"
                       onClick={toggleDirectDelivery}
-                      className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${
+                      className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer ${
                         directDeliveryEnabled ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'bg-[#e52a20] text-white shadow-lg shadow-red-500/20'
                       }`}
                     >
@@ -667,8 +734,9 @@ export default function AdminDashboard() {
                       <p className="text-xs text-gray-400 mt-1">Show or hide Uber Eats order button on the site.</p>
                     </div>
                     <button
+                      type="button"
                       onClick={toggleUberEats}
-                      className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${
+                      className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer ${
                         ubereatsEnabled ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'bg-[#e52a20] text-white shadow-lg shadow-red-500/20'
                       }`}
                     >
@@ -682,8 +750,9 @@ export default function AdminDashboard() {
                       <p className="text-xs text-gray-400 mt-1">Show or hide PickMe Food order button on the site.</p>
                     </div>
                     <button
+                      type="button"
                       onClick={togglePickMe}
-                      className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${
+                      className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer ${
                         pickmeEnabled ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'bg-[#e52a20] text-white shadow-lg shadow-red-500/20'
                       }`}
                     >
