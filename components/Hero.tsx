@@ -2,23 +2,47 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-
-const ROTATING_HIGHLIGHTS = [
-  { text: '3.30PM - 12.30AM', icon: '🍲', color: 'from-[#ffbd18] to-amber-400' }
-];
+import { supabase } from '@/lib/supabaseClient';
 
 export default function Hero() {
-  const [highlightIdx, setHighlightIdx] = useState(0);
+  const [isOpen, setIsOpen] = useState<boolean | null>(null);
 
-  // Auto-cycle through highlights
   useEffect(() => {
-    const timer = setInterval(() => {
-      setHighlightIdx((prev) => (prev + 1) % ROTATING_HIGHLIGHTS.length);
-    }, 3000);
-    return () => clearInterval(timer);
-  }, []);
+    // 1. Fetch live store status on load
+    async function fetchStoreStatus() {
+      const { data } = await supabase
+        .from('store_settings')
+        .select('is_open')
+        .limit(1)
+        .maybeSingle();
 
-  const currentHighlight = ROTATING_HIGHLIGHTS[highlightIdx];
+      if (data && typeof data.is_open === 'boolean') {
+        setIsOpen(data.is_open);
+      } else {
+        setIsOpen(true); // Fallback default
+      }
+    }
+
+    fetchStoreStatus();
+
+    // 2. Subscribe to realtime updates from admin panel changes
+    const channel = supabase
+      .channel('hero-store-status-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'store_settings' },
+        (payload) => {
+          if (payload.new && typeof payload.new.is_open === 'boolean') {
+            setIsOpen(payload.new.is_open);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   return (
     <header id="home" className="relative min-h-screen pt-28 pb-20 md:pb-24 flex flex-col justify-center items-center bg-[#070707] overflow-hidden">
@@ -51,22 +75,30 @@ export default function Hero() {
         
         <div className="space-y-6 sm:space-y-8 flex flex-col items-center">
           
-          {/* Live Operational Status + Cycling Feature Badge */}
+          {/* Live Operational Status + Opening Hours Badge */}
           <div className="inline-flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 bg-[#121212]/90 border border-[#2a2a2a] px-4 sm:px-5 py-2 rounded-full shadow-2xl backdrop-blur-md">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
-            </span>
-            <span className="text-gray-300 text-[10px] sm:text-xs font-black uppercase tracking-wider">
-              Opens AT
-            </span>
-            <span className="text-[#333]">|</span>
-            <div key={currentHighlight.text} className="flex items-center gap-1.5 animate-fadeIn">
-              <span className="text-sm">{currentHighlight.icon}</span>
-              <span className={`text-[10px] sm:text-xs font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r ${currentHighlight.color}`}>
-                {currentHighlight.text}
+            
+            {/* Dynamic Status Indicator */}
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isOpen === false ? 'bg-red-400' : 'bg-green-400'}`} />
+                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isOpen === false ? 'bg-red-500' : 'bg-green-500'}`} />
+              </span>
+              <span className={`text-[10px] sm:text-xs font-black uppercase tracking-wider ${isOpen === false ? 'text-red-400' : 'text-green-400'}`}>
+                {isOpen === false ? 'CLOSED NOW' : 'OPEN NOW'}
               </span>
             </div>
+
+            <span className="text-[#333]">|</span>
+
+            {/* Operating Hours */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm">🕒</span>
+              <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-[#ffbd18] to-amber-400">
+                3.30PM - 12.30AM
+              </span>
+            </div>
+
           </div>
 
           {/* Alive Brand Title */}
