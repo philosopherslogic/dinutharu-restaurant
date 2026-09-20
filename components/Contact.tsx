@@ -1,13 +1,21 @@
 'use client';
 
+import { useState } from 'react';
+
 // Replace these with the exact coordinates you copied from Google Maps
 const RESTAURANT_LAT = 6.8221006502870924;
 const RESTAURANT_LNG = 79.92155467055221;
 
 export default function Contact() {
+  const [platformNotice, setPlatformNotice] = useState<string | null>(null);
+
   // Construct precise URL formats
   const mapEmbedUrl = `https://www.google.com/maps?q=${RESTAURANT_LAT},${RESTAURANT_LNG}&hl=en&z=17&output=embed`;
   const mapDirectionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${RESTAURANT_LAT},${RESTAURANT_LNG}`;
+
+  const handlePlatformClick = (platformName: string) => {
+    setPlatformNotice(platformName);
+  };
 
   return (
     <section id="contact" className="py-20 bg-[#0d0d0d] text-white border-t border-[#222222]">
@@ -78,7 +86,7 @@ export default function Contact() {
                   Order Platforms
                 </b>
                 <span className="text-gray-300 text-sm">
-                  •Restaurant Takeaway • Order from Website(Dinutharu Delivery) • PickMe • Uber Eats
+                  • Restaurant Takeaway • Order from Website (Dinutharu Delivery) • PickMe • Uber Eats
                 </span>
               </div>
             </div>
@@ -113,22 +121,22 @@ export default function Contact() {
               >
                 📍 Get Directions
               </a>
-              <a
-                href="https://pickme.lk/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-3 bg-[#181818] border border-[#333333] hover:border-[#ffbd18] text-gray-200 text-xs font-bold uppercase tracking-wider rounded-xl transition-all"
+
+              <button
+                type="button"
+                onClick={() => handlePlatformClick('PickMe Food')}
+                className="px-4 py-3 bg-[#181818] border border-[#333333] hover:border-[#ffbd18] text-gray-200 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer"
               >
                 PickMe
-              </a>
-              <a
-                href="https://www.ubereats.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-3 bg-[#181818] border border-[#333333] hover:border-[#ffbd18] text-gray-200 text-xs font-bold uppercase tracking-wider rounded-xl transition-all"
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handlePlatformClick('Uber Eats')}
+                className="px-4 py-3 bg-[#181818] border border-[#333333] hover:border-[#ffbd18] text-gray-200 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer"
               >
                 Uber Eats
-              </a>
+              </button>
             </div>
 
           </div>
@@ -136,6 +144,45 @@ export default function Contact() {
         </div>
 
       </div>
+
+      {/* PLATFORM COMING SOON NOTICE MODAL */}
+      {platformNotice && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#121212] border border-[#2a2a2a] rounded-3xl p-6 sm:p-8 max-w-md w-full text-center space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            
+            <div className="w-16 h-16 bg-[#ffbd18]/10 border border-[#ffbd18]/20 rounded-full flex items-center justify-center mx-auto text-3xl">
+              🛵
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-2xl font-black text-white uppercase tracking-tight">
+                {platformNotice} Coming Soon
+              </h3>
+              <p className="text-xs sm:text-sm text-gray-400 leading-relaxed">
+                Orders via <strong className="text-white">{platformNotice}</strong> are not available right now and will be launched soon!
+              </p>
+            </div>
+
+            <div className="bg-[#080808] p-4 rounded-2xl border border-[#222222] space-y-1">
+              <span className="text-[10px] font-black uppercase tracking-widest text-[#ffbd18] block">
+                Use Dinutharu Delivery Or Restaurant pickup for now
+              </span>
+              <p className="text-xs font-bold text-gray-300">
+                You can order directly through our website menu or call us directly at <span className="text-white">071 124 2301</span>.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setPlatformNotice(null)}
+              className="w-full py-3.5 bg-gradient-to-r from-[#ffbd18] to-amber-500 text-[#070707] font-black text-xs uppercase tracking-wider rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[#ffbd18]/25 cursor-pointer"
+            >
+              Understand
+            </button>
+          </div>
+        </div>
+      )}
+
     </section>
   );
 }
