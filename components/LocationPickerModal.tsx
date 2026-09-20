@@ -1,16 +1,10 @@
 'use client';
 
-import { useState, useEffect, FC } from 'react';
+import { useState, useEffect, useRef, FC } from 'react';
 import dynamic from 'next/dynamic';
 import { getSavedCustomerProfile } from '@/lib/customerIdentity';
 
 const RESTAURANT_COORDS: [number, number] = [6.8221006502870924, 79.92155467055221];
-
-// Dynamically import Leaflet components to prevent SSR window errors in Next.js
-const MapContainer = dynamic(() => import('react-leaflet').then((m) => m.MapContainer), { ssr: false });
-const TileLayer = dynamic(() => import('react-leaflet').then((m) => m.TileLayer), { ssr: false });
-const Marker = dynamic(() => import('react-leaflet').then((m) => m.Marker), { ssr: false });
-const Polyline = dynamic(() => import('react-leaflet').then((m) => m.Polyline), { ssr: false });
 
 function ThickGoldArrow() {
   return (
@@ -66,6 +60,78 @@ export interface LocationPickerProps {
   onConfirmLocation: (distanceKm: number, lat: number, lng: number) => void;
 }
 
+interface MapContentProps {
+  selectedLat: number | null;
+  selectedLng: number | null;
+  routePolyline: [number, number][];
+  onLocationSelect: (lat: number, lng: number) => void;
+  leafletIcons: { restaurant: any; customer: any };
+  isManualTapRef: React.MutableRefObject<boolean>;
+}
+
+const LeafletMapInner: FC<MapContentProps> = ({
+  selectedLat,
+  selectedLng,
+  routePolyline,
+  onLocationSelect,
+  leafletIcons,
+  isManualTapRef,
+}) => {
+  const { MapContainer, TileLayer, Marker, Polyline, useMapEvents, useMap } = require('react-leaflet');
+  const L = require('leaflet');
+
+  function MapClickHandler() {
+    useMapEvents({
+      click(e) {
+        // Flag as manual tap before triggering coordinate change
+        isManualTapRef.current = true;
+        onLocationSelect(e.latlng.lat, e.latlng.lng);
+      },
+    });
+    return null;
+  }
+
+  function MapBoundsController() {
+    const map = useMap();
+    useEffect(() => {
+      // Only recalculate map zoom bounds if auto-detected or GPS re-detected
+      if (!isManualTapRef.current && selectedLat !== null && selectedLng !== null) {
+        const bounds = L.latLngBounds([
+          RESTAURANT_COORDS,
+          [selectedLat, selectedLng],
+        ]);
+        routePolyline.forEach((coord) => bounds.extend(coord));
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+      }
+    }, [map, routePolyline]);
+    return null;
+  }
+
+  return (
+    <MapContainer
+      center={RESTAURANT_COORDS}
+      zoom={13}
+      style={{ height: '100%', width: '100%' }}
+    >
+      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      <MapClickHandler />
+      <MapBoundsController />
+
+      <Marker position={RESTAURANT_COORDS} icon={leafletIcons.restaurant} />
+
+      {selectedLat !== null && selectedLng !== null && (
+        <Marker position={[selectedLat, selectedLng]} icon={leafletIcons.customer} />
+      )}
+
+      {routePolyline.length > 0 && (
+        <Polyline positions={routePolyline} color="#ffbd18" weight={5} opacity={0.8} />
+      )}
+    </MapContainer>
+  );
+};
+
+const DynamicMapContainer = dynamic(() => Promise.resolve(LeafletMapInner), { ssr: false });
+
 const LocationPickerModal: FC<LocationPickerProps> = ({
   isOpen,
   onClose,
@@ -82,10 +148,11 @@ const LocationPickerModal: FC<LocationPickerProps> = ({
   const [showGpsGuide, setShowGpsGuide] = useState(false);
   const [leafletIcons, setLeafletIcons] = useState<{ restaurant: any; customer: any } | null>(null);
 
-  // Active step flow: 'detect' | 'map' | 'confirm'
   const [activeStep, setActiveStep] = useState<'detect' | 'map' | 'confirm'>('detect');
 
-  // Load Leaflet pin icons strictly on client side
+  // Ref tracking if interaction is a manual tap vs auto/button GPS load
+  const isManualTapRef = useRef<boolean>(false);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       import('leaflet').then((L) => {
@@ -152,6 +219,9 @@ const LocationPickerModal: FC<LocationPickerProps> = ({
   }, []);
 
   const requestGPSLocation = () => {
+    // Reset tap ref to allow fitBounds to run for GPS auto-center
+    isManualTapRef.current = false;
+
     if (typeof window === 'undefined' || !navigator.geolocation) {
       setPermissionNotice('⚠️ Geolocation is not supported by your browser. Tap on the map to set location manually.');
       setActiveStep('map');
@@ -196,6 +266,7 @@ const LocationPickerModal: FC<LocationPickerProps> = ({
     if (isOpen) {
       const savedProfile = getSavedCustomerProfile();
       if (savedProfile && savedProfile.lat && savedProfile.lng) {
+        isManualTapRef.current = false;
         setSelectedLat(savedProfile.lat);
         setSelectedLng(savedProfile.lng);
         setActiveStep('confirm');
@@ -282,21 +353,21 @@ const LocationPickerModal: FC<LocationPickerProps> = ({
             activeStep === 'detect' ? 'bg-[#ffbd18]/10 border-[#ffbd18] text-[#ffbd18]' : 'bg-[#070707] border-[#222] text-gray-400'
           }`}>
             <span className="text-[10px] font-black uppercase block">Step 1</span>
-            <span className="text-xs font-bold">1.Wait(Auto Location Detection)</span>
+            <span className="text-xs font-bold">1. Wait (Auto Location Detection)</span>
           </div>
 
           <div className={`p-2 rounded-xl border text-center transition-all ${
             activeStep === 'map' ? 'bg-[#ffbd18]/10 border-[#ffbd18] text-[#ffbd18]' : 'bg-[#070707] border-[#222] text-gray-400'
           }`}>
             <span className="text-[10px] font-black uppercase block">Step 2</span>
-            <span className="text-xs font-bold">2. Tap on your house(if auto detection is inacurate)</span>
+            <span className="text-xs font-bold">2. Tap on your house (if auto detection is inaccurate)</span>
           </div>
 
           <div className={`p-2 rounded-xl border text-center transition-all ${
             activeStep === 'confirm' ? 'bg-green-500/10 border-green-500 text-green-400' : 'bg-[#070707] border-[#222] text-gray-400'
           }`}>
             <span className="text-[10px] font-black uppercase block">Step 3</span>
-            <span className="text-xs font-bold">3.Click confirm location button</span>
+            <span className="text-xs font-bold">3. Click confirm location button</span>
           </div>
         </div>
 
@@ -375,7 +446,7 @@ const LocationPickerModal: FC<LocationPickerProps> = ({
                 : 'bg-[#181818] border-[#333] hover:border-[#ffbd18] text-[#ffbd18]'
             }`}
           >
-            <span>🎯</span> Detect My Current GPS Location
+            <span>🎯</span> Re-Detect My Current Location
           </button>
         </div>
 
@@ -389,25 +460,19 @@ const LocationPickerModal: FC<LocationPickerProps> = ({
 
           <div className="h-72 sm:h-80 w-full rounded-xl overflow-hidden border border-[#222] relative">
             {leafletIcons && (
-              <MapContainer
-                center={RESTAURANT_COORDS}
-                zoom={13}
-                style={{ height: '100%', width: '100%' }}
-              >
-                <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-
-                <Marker position={RESTAURANT_COORDS} icon={leafletIcons.restaurant} />
-
-                {selectedLat !== null && selectedLng !== null && (
-                  <Marker position={[selectedLat, selectedLng]} icon={leafletIcons.customer} />
-                )}
-
-                {routePolyline.length > 0 && (
-                  <Polyline positions={routePolyline} color="#ffbd18" weight={5} opacity={0.8} />
-                )}
-              </MapContainer>
+              <DynamicMapContainer
+                selectedLat={selectedLat}
+                selectedLng={selectedLng}
+                routePolyline={routePolyline}
+                leafletIcons={leafletIcons}
+                isManualTapRef={isManualTapRef}
+                onLocationSelect={(lat, lng) => {
+                  setSelectedLat(lat);
+                  setSelectedLng(lng);
+                  setPermissionNotice(null);
+                  setActiveStep('confirm');
+                }}
+              />
             )}
           </div>
         </div>
