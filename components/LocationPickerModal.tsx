@@ -225,18 +225,19 @@ const LocationPickerModal: FC<LocationPickerProps> = ({
     if (typeof window === 'undefined' || !navigator.geolocation) {
       setPermissionNotice('⚠️ Geolocation is not supported by your browser. Tap on the map to set location manually.');
       setActiveStep('map');
+      setShowGpsGuide(true);
       return;
     }
 
     setLoadingDistance(true);
     setPermissionNotice(null);
-    setShowGpsGuide(false);
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setSelectedLat(pos.coords.latitude);
         setSelectedLng(pos.coords.longitude);
         setPermissionNotice(null);
+        setShowGpsGuide(false);
         setActiveStep('confirm');
       },
       (err) => {
@@ -245,10 +246,10 @@ const LocationPickerModal: FC<LocationPickerProps> = ({
         setActiveStep('map');
         switch (err.code) {
           case err.PERMISSION_DENIED:
-            setPermissionNotice('🔒 Location permission is blocked in your browser settings.');
+            setPermissionNotice('🔒 Location access was denied or blocked in your browser.');
             break;
           case err.POSITION_UNAVAILABLE:
-            setPermissionNotice('📡 GPS/Location services are turned off on your phone.');
+            setPermissionNotice('📡 GPS/Location services are turned off on your device.');
             break;
           case err.TIMEOUT:
             setPermissionNotice('⏱️ GPS request timed out. Please tap directly on the map.');
@@ -390,38 +391,84 @@ const LocationPickerModal: FC<LocationPickerProps> = ({
           </div>
         </div>
 
-        {/* Location Permission Help */}
+        {/* Intuitive Mobile-Optimized Location Permission Help Card */}
         {permissionNotice && (
-          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400 text-xs flex flex-col gap-2">
+          <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400 text-xs flex flex-col gap-3 shadow-lg">
             <div className="flex items-center justify-between">
-              <span>{permissionNotice}</span>
+              <span className="font-semibold">{permissionNotice}</span>
               <button
                 onClick={() => setShowGpsGuide(!showGpsGuide)}
-                className="text-[11px] font-bold text-[#ffbd18] underline hover:text-white"
+                className="text-[11px] font-bold text-[#ffbd18] underline hover:text-white flex-shrink-0 ml-2"
               >
                 {showGpsGuide ? 'Hide Instructions' : 'How to Turn On Location?'}
               </button>
             </div>
 
             {showGpsGuide && (
-              <div className="mt-2 pt-2 border-t border-amber-500/20 text-[11px] text-gray-300 space-y-2 bg-[#080808] p-3 rounded-lg">
-                <p className="font-bold text-[#ffbd18] uppercase">📱 How to Enable Location Access:</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <p className="font-bold text-white">🤖 Android (Chrome):</p>
-                    <ol className="list-decimal pl-4 space-y-0.5">
-                      <li>Tap 🔒 <b>Padlock icon</b> in URL bar.</li>
-                      <li>Tap <b>Permissions</b> ➔ <b>Location</b>.</li>
-                      <li>Select <b>Allow</b> & refresh page.</li>
-                    </ol>
+              <div className="pt-2 border-t border-amber-500/20 text-[11px] text-gray-300 space-y-3 bg-[#080808] p-3 rounded-xl">
+                <p className="font-extrabold text-[#ffbd18] uppercase tracking-wide flex items-center gap-1.5 text-xs">
+                  <span>📱</span> Quick Steps to Enable Location Access:
+                </p>
+
+                {/* Primary Guided Steps */}
+                <div className="space-y-2">
+                  {/* Step 1: Notification Panel */}
+                  <div className="bg-[#141414] border border-[#262626] p-2.5 rounded-lg flex items-start gap-2.5">
+                    <span className="bg-[#ffbd18] text-[#070707] font-black text-[10px] px-1.5 py-0.5 rounded-md mt-0.5 flex-shrink-0">STEP 1</span>
+                    <div className="space-y-0.5">
+                      <p className="font-bold text-white text-xs">Turn on Location from Notification Panel</p>
+                      <p className="text-gray-400 text-[11px] flex items-center gap-1">
+                        Swipe down from the top of your phone screen and tap the <span className="inline-flex items-center gap-1 text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30">📍 Location</span> tile to turn it ON.
+                      </p>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <p className="font-bold text-white">🍎 iPhone / iOS (Safari):</p>
-                    <ol className="list-decimal pl-4 space-y-0.5">
-                      <li>Open iPhone <b>Settings</b> ➔ <b>Privacy & Security</b>.</li>
-                      <li>Tap <b>Location Services</b> ➔ Turn ON.</li>
-                      <li>Find Safari ➔ Select <b>While Using App</b>.</li>
-                    </ol>
+
+                  {/* Step 2: Pop-up Allow Mockup */}
+                  <div className="bg-[#141414] border border-[#262626] p-2.5 rounded-lg flex items-start gap-2.5">
+                    <span className="bg-[#ffbd18] text-[#070707] font-black text-[10px] px-1.5 py-0.5 rounded-md mt-0.5 flex-shrink-0">STEP 2</span>
+                    <div className="space-y-1.5 w-full">
+                      <p className="font-bold text-white text-xs">Tap &quot;Allow&quot; on the Location Pop-up</p>
+                      
+                      {/* Realistic UI Pop-up Mockup */}
+                      <div className="bg-[#0a0a0a] border border-[#333] p-2.5 rounded-xl space-y-2 shadow-inner">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">🌐</span>
+                          <span className="text-[10px] text-gray-300 font-medium">website wants to use your device&apos;s location</span>
+                        </div>
+                        <div className="flex justify-end gap-2 pt-1 border-t border-[#1e1e1e]">
+                          <span className="text-[10px] text-gray-500 px-2 py-1">Block</span>
+                          <span className="inline-flex items-center gap-1.5 bg-blue-600/30 text-blue-400 border border-blue-500/50 font-bold text-[10px] px-2.5 py-1 rounded-full shadow-sm">
+                            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+                            Allow
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Secondary Help: Didn't see prompt or hit Deny */}
+                <div className="pt-2 border-t border-amber-500/20 space-y-2">
+                  <p className="font-bold text-amber-400 text-[11px] uppercase tracking-wider">
+                    Didn&apos;t see the pop-up or accidentally clicked Deny?
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                    <div className="bg-[#121212] p-2 rounded-lg border border-[#222] space-y-1">
+                      <p className="font-bold text-white flex items-center gap-1">🤖 Android (Chrome):</p>
+                      <ol className="list-decimal pl-4 text-gray-400 space-y-0.5">
+                        <li>Tap 🔒 <b>Padlock / Settings icon</b> in top URL bar.</li>
+                        <li>Tap <b>Permissions</b> ➔ <b>Location</b>.</li>
+                        <li>Change option to <b>Allow</b> & refresh page.</li>
+                      </ol>
+                    </div>
+                    <div className="bg-[#121212] p-2 rounded-lg border border-[#222] space-y-1">
+                      <p className="font-bold text-white flex items-center gap-1">🍎 iPhone / iOS (Safari):</p>
+                      <ol className="list-decimal pl-4 text-gray-400 space-y-0.5">
+                        <li>Open Phone <b>Settings</b> ➔ <b>Privacy & Security</b>.</li>
+                        <li>Tap <b>Location Services</b> ➔ Turn ON.</li>
+                        <li>Find Safari ➔ Select <b>While Using App</b>.</li>
+                      </ol>
+                    </div>
                   </div>
                 </div>
               </div>

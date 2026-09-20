@@ -275,7 +275,7 @@ export default function OrderModal() {
                   }`}
                 >
                   {directDeliveryEnabled
-                    ? 'Add to site cart & checkout direct'
+                    ? '💵 Cash on Delivery / Checkout at restaurant'
                     : 'Currently Unavailable'}
                 </p>
               </div>
