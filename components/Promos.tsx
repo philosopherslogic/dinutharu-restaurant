@@ -19,9 +19,15 @@ interface PromoItem {
 export default function Promos() {
   const [promos, setPromos] = useState<PromoItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Store Operational Status States
+  const [isStoreOpen, setIsStoreOpen] = useState<boolean | null>(null);
+  const [showClosedModal, setShowClosedModal] = useState(false);
+
   const router = useRouter();
 
   useEffect(() => {
+    // 1. Fetch Active Promos
     async function fetchActivePromos() {
       const { data, error } = await supabase
         .from('promos')
@@ -34,10 +40,57 @@ export default function Promos() {
       }
       setLoading(false);
     }
+
+    // 2. Fetch Live Store Status
+    async function fetchStoreStatus() {
+      try {
+        const { data } = await supabase
+          .from('store_settings')
+          .select('is_open')
+          .limit(1)
+          .maybeSingle();
+
+        if (data && typeof data.is_open === 'boolean') {
+          setIsStoreOpen(data.is_open);
+        } else {
+          setIsStoreOpen(true); // Fallback default
+        }
+      } catch (err) {
+        console.error('Error fetching store settings:', err);
+        setIsStoreOpen(true);
+      }
+    }
+
     fetchActivePromos();
+    fetchStoreStatus();
+
+    // 3. Real-time Subscription for Store Settings
+    const channel = supabase
+      .channel('promos-store-status')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'store_settings' },
+        (payload) => {
+          if (payload.new && typeof payload.new.is_open === 'boolean') {
+            setIsStoreOpen(payload.new.is_open);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleOpenOrder = (id: string) => {
+    // If store is explicitly closed, intercept and trigger warning modal
+    if (isStoreOpen === false) {
+      setShowClosedModal(true);
+      return;
+    }
+
+    // Otherwise proceed to ordering screen
     router.push(`/?order=${id}`, { scroll: false });
   };
 
@@ -46,10 +99,8 @@ export default function Promos() {
   return (
     <section id="promos" className="py-28 bg-[#040404] text-white relative overflow-hidden border-t border-[#1a1a1a]">
       
-      {/* 1. MAXIMUM DYNAMIC BACKGROUND ANIMATIONS (FLAMES, SMOKE, PARTICLES) */}
+      {/* 1. MAXIMUM DYNAMIC BACKGROUND ANIMATIONS */}
       <div className="absolute inset-0 pointer-events-none z-0">
-        
-        {/* Pulsing Wok Flame Halos */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-r from-[#e52a20]/20 via-[#ffbd18]/15 to-transparent rounded-full blur-[180px] animate-pulse" />
         <div className="absolute top-1/4 right-10 w-[400px] h-[400px] bg-[#e52a20]/10 rounded-full blur-[140px] animate-[pulse_6s_ease-in-out_infinite]" />
 
@@ -96,15 +147,8 @@ export default function Promos() {
             {promos.length === 1 ? (
               <div className="max-w-4xl mx-auto relative">
                 
-                {/* FLOATING RICE & CHILI SPLASH EFFECTS OVERLAY */}
-                <div className="absolute -top-8 -left-8 text-3xl sm:text-4xl pointer-events-none z-30 animate-[splash_4s_ease-in-out_infinite]">
-                  
-                </div>
                 <div className="absolute -bottom-6 -right-6 text-3xl sm:text-4xl pointer-events-none z-30 animate-[splash_5s_ease-in-out_infinite_1s]">
                   🌶️
-                </div>
-                <div className="absolute top-1/2 -right-8 text-2xl pointer-events-none z-30 animate-[splash_6s_ease-in-out_infinite_2s]">
-                  
                 </div>
 
                 {promos.map((promo) => {
@@ -168,8 +212,9 @@ export default function Promos() {
                           </div>
 
                           <button
+                            type="button"
                             onClick={() => handleOpenOrder(promo.id)}
-                            className="px-8 py-4 bg-gradient-to-r from-[#ffbd18] via-amber-400 to-[#e52a20] text-[#070707] font-black text-xs uppercase tracking-wider rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-xl shadow-[#ffbd18]/30 flex items-center gap-2"
+                            className="px-8 py-4 bg-gradient-to-r from-[#ffbd18] via-amber-400 to-[#e52a20] text-[#070707] font-black text-xs uppercase tracking-wider rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-xl shadow-[#ffbd18]/30 flex items-center gap-2 cursor-pointer"
                           >
                             <span>🛒</span> Order Now
                           </button>
@@ -229,8 +274,9 @@ export default function Promos() {
                         </div>
 
                         <button
+                          type="button"
                           onClick={() => handleOpenOrder(promo.id)}
-                          className="px-6 py-3 bg-gradient-to-r from-[#ffbd18] to-amber-500 text-[#070707] font-black text-xs uppercase tracking-wider rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[#ffbd18]/20"
+                          className="px-6 py-3 bg-gradient-to-r from-[#ffbd18] to-amber-500 text-[#070707] font-black text-xs uppercase tracking-wider rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[#ffbd18]/20 cursor-pointer"
                         >
                           Order Now
                         </button>
@@ -245,7 +291,45 @@ export default function Promos() {
 
       </div>
 
-      {/* 2. CUSTOM CSS ANIMATION KEYFRAMES FOR PARTICLES, SMOKE & SPLASHES */}
+      {/* STORE CLOSED WARNING MODAL */}
+      {showClosedModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#121212] border border-[#2a2a2a] rounded-3xl p-6 sm:p-8 max-w-md w-full text-center space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            
+            <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mx-auto text-3xl">
+              🌙
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-2xl font-black text-white uppercase tracking-tight">
+                Store is Currently Closed
+              </h3>
+              <p className="text-xs sm:text-sm text-gray-400 leading-relaxed">
+                We are not taking online orders right now. Our direct ordering system reopens during our regular operational hours.
+              </p>
+            </div>
+
+            <div className="bg-[#080808] p-4 rounded-2xl border border-[#222222] space-y-1">
+              <span className="text-[10px] font-black uppercase tracking-widest text-[#ffbd18] block">
+                Standard Business Hours
+              </span>
+              <p className="text-xs font-bold text-gray-200">
+                Daily: 3:30 PM - 12:30 AM
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowClosedModal(false)}
+              className="w-full py-3.5 bg-gradient-to-r from-[#ffbd18] to-amber-500 text-[#070707] font-black text-xs uppercase tracking-wider rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[#ffbd18]/25 cursor-pointer"
+            >
+              Got It
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 2. CUSTOM CSS ANIMATION KEYFRAMES */}
       <style jsx global>{`
         @keyframes emberRise {
           0% { transform: translateY(0px) scale(0.8); opacity: 0.2; }

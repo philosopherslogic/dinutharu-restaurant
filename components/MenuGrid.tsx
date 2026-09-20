@@ -18,10 +18,15 @@ export default function MenuGrid() {
   const [activeCategory, setActiveCategory] = useState('all');
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Store Operational Status States
+  const [isStoreOpen, setIsStoreOpen] = useState<boolean | null>(null);
+  const [showClosedModal, setShowClosedModal] = useState(false);
+
   const router = useRouter();
 
-  // Fetch menu directly from Supabase on mount
   useEffect(() => {
+    // 1. Fetch live menu directly from Supabase
     async function fetchMenu() {
       try {
         const { data, error } = await supabase
@@ -51,7 +56,46 @@ export default function MenuGrid() {
       }
     }
 
+    // 2. Fetch live store status
+    async function fetchStoreStatus() {
+      try {
+        const { data } = await supabase
+          .from('store_settings')
+          .select('is_open')
+          .limit(1)
+          .maybeSingle();
+
+        if (data && typeof data.is_open === 'boolean') {
+          setIsStoreOpen(data.is_open);
+        } else {
+          setIsStoreOpen(true); // Fallback default
+        }
+      } catch (err) {
+        console.error('Error fetching store settings:', err);
+        setIsStoreOpen(true);
+      }
+    }
+
     fetchMenu();
+    fetchStoreStatus();
+
+    // 3. Subscribe to Realtime updates for Store Settings (Admin Panel sync)
+    const channel = supabase
+      .channel('menu-grid-store-status')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'store_settings' },
+        (payload) => {
+          if (payload.new && typeof payload.new.is_open === 'boolean') {
+            setIsStoreOpen(payload.new.is_open);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const filteredItems =
@@ -64,6 +108,13 @@ export default function MenuGrid() {
   };
 
   const handleOpenOrder = (id: string) => {
+    // If store is explicitly closed, prevent modal navigation and trigger warning modal
+    if (isStoreOpen === false) {
+      setShowClosedModal(true);
+      return;
+    }
+
+    // Otherwise proceed to the ordering screen
     router.push(`/?order=${id}`, { scroll: false });
   };
 
@@ -171,7 +222,7 @@ export default function MenuGrid() {
                       <h3
                         className={`text-xl font-black transition-colors leading-tight ${
                           item.isAvailable
-                            ? 'text-white group-hover:text-[#ffbd18]'
+                            ? 'group-hover:text-[#ffbd18] text-white'
                             : 'text-gray-400'
                         }`}
                       >
@@ -221,6 +272,45 @@ export default function MenuGrid() {
         )}
 
       </div>
+
+      {/* STORE CLOSED WARNING MODAL */}
+      {showClosedModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#121212] border border-[#2a2a2a] rounded-3xl p-6 sm:p-8 max-w-md w-full text-center space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            
+            <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mx-auto text-3xl">
+              🌙
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-2xl font-black text-white uppercase tracking-tight">
+                Store is Currently Closed
+              </h3>
+              <p className="text-xs sm:text-sm text-gray-400 leading-relaxed">
+                We are not taking online orders right now. Our direct ordering system reopens during our regular operational hours.
+              </p>
+            </div>
+
+            <div className="bg-[#080808] p-4 rounded-2xl border border-[#222222] space-y-1">
+              <span className="text-[10px] font-black uppercase tracking-widest text-[#ffbd18] block">
+                Standard Business Hours
+              </span>
+              <p className="text-xs font-bold text-gray-200">
+                Daily: 3:30 PM - 12:30 AM
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowClosedModal(false)}
+              className="w-full py-3.5 bg-gradient-to-r from-[#ffbd18] to-amber-500 text-[#070707] font-black text-xs uppercase tracking-wider rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[#ffbd18]/25"
+            >
+              Got It
+            </button>
+          </div>
+        </div>
+      )}
+
     </section>
   );
 }
