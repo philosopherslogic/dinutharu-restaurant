@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
@@ -15,6 +15,7 @@ import {
   syncUserProfile, 
   claimGuestOrders 
 } from '@/lib/customerIdentity';
+import { sendTelegramOrderNotification } from '@/lib/telegram';
 import AuthModal from '@/components/AuthModal';
 import type LocationPickerModalType from '@/components/LocationPickerModal';
 
@@ -22,6 +23,55 @@ const LocationPickerModal = dynamic<React.ComponentProps<typeof LocationPickerMo
   () => import('@/components/LocationPickerModal'),
   { ssr: false }
 );
+
+// Reusable Thick Gold Arrow SVG Component
+function ThickGoldArrow() {
+  return (
+    <svg 
+      viewBox="0 0 100 100" 
+      className="w-12 h-12 sm:w-16 sm:h-16 filter drop-shadow-[0_10px_15px_rgba(0,0,0,0.8)]"
+      fill="none" 
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#FFE072"/>
+          <stop offset="40%" stopColor="#FFBD18"/>
+          <stop offset="75%" stopColor="#E0A410"/>
+          <stop offset="100%" stopColor="#996A00"/>
+        </linearGradient>
+
+        <filter id="goldGlow" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feComponentTransfer in="blur" result="glow">
+            <feFuncA type="linear" slope="0.8"/>
+          </feComponentTransfer>
+          <feMerge>
+            <feMergeNode in="glow"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+
+      <g filter="url(#goldGlow)">
+        <path 
+          d="M 80 15 
+             L 52 43 
+             L 62 53 
+             L 20 60 
+             L 27 18 
+             L 37 28 
+             L 65 0 
+             Z" 
+          fill="url(#goldGradient)" 
+          stroke="#050505" 
+          strokeWidth="2.5" 
+          strokeLinejoin="round"
+        />
+      </g>
+    </svg>
+  );
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -47,6 +97,18 @@ export default function CheckoutPage() {
   // Closed Store Modal State
   const [isClosedModalOpen, setIsClosedModalOpen] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // Active Validation Error Field ID for Arrow Positioning
+  const [activeErrorField, setActiveErrorField] = useState<string | null>(null);
+
+  // Field Refs for Auto-scrolling
+  const fieldRefs = {
+    name: useRef<HTMLDivElement>(null),
+    phone: useRef<HTMLDivElement>(null),
+    pickupTime: useRef<HTMLDivElement>(null),
+    location: useRef<HTMLDivElement>(null),
+    address: useRef<HTMLDivElement>(null),
+  };
 
   const { cart = [], updateQuantity, removeFromCart, clearCart, getTotalPrice } = useCartStore();
   const subtotalPrice = getTotalPrice ? getTotalPrice() : 0;
@@ -87,34 +149,51 @@ export default function CheckoutPage() {
     return now.toTimeString().slice(0, 5);
   };
 
+  // Helper to trigger active field error & scroll into view
+  const triggerFieldError = (fieldKey: keyof typeof fieldRefs, message: string) => {
+    setValidationError(message);
+    setActiveErrorField(fieldKey);
+    fieldRefs[fieldKey]?.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
+    setActiveErrorField(null);
 
-    // 1. Validate Form Fields
-    if (!customerName || !phoneNumber) {
-      setValidationError('Please fill in your name and phone number.');
+    // 1. Validate Form Fields with Pointer Guidance
+    if (!customerName.trim()) {
+      triggerFieldError('name', 'Please enter your full name.');
+      return;
+    }
+
+    if (!phoneNumber.trim()) {
+      triggerFieldError('phone', 'Please enter your phone number.');
       return;
     }
 
     if (deliveryType === 'delivery') {
-      if (!address || !locationSelected || distanceKm === null) {
-        setValidationError('Please select your location on the map and enter your full address.');
+      if (!locationSelected || distanceKm === null) {
+        triggerFieldError('location', 'Please select your delivery location on the map.');
         return;
       }
       if (distanceKm > 5) {
-        setValidationError('Selected location exceeds our 5km delivery radius.');
+        triggerFieldError('location', 'Selected location exceeds our 5km delivery radius.');
+        return;
+      }
+      if (!address.trim()) {
+        triggerFieldError('address', 'Please enter your complete street address details.');
         return;
       }
     }
 
     if (deliveryType === 'pickup') {
       if (!pickupTime) {
-        setValidationError('Please select a pickup time.');
+        triggerFieldError('pickupTime', 'Please select a pickup time.');
         return;
       }
       if (pickupTime < getMinPickupTime()) {
-        setValidationError('Pickup time must be at least 30 minutes from now.');
+        triggerFieldError('pickupTime', 'Pickup time must be at least 30 minutes from now.');
         return;
       }
     }
@@ -185,6 +264,21 @@ export default function CheckoutPage() {
         setValidationError(`Database Error: ${error.message}`);
         return;
       }
+
+      // 6. Trigger Telegram Bot Alert
+      await sendTelegramOrderNotification({
+        orderCode,
+        customerName,
+        phoneNumber,
+        deliveryType,
+        address,
+        pickupTime,
+        distanceKm,
+        deliveryFee,
+        totalPrice: finalTotalPrice,
+        notes,
+        items: cart,
+      });
 
       clearCart();
       router.push('/my-orders');
@@ -339,43 +433,74 @@ export default function CheckoutPage() {
                 </div>
               )}
 
-              <div>
+              {/* 1. Customer Name */}
+              <div ref={fieldRefs.name} className="relative">
+                {activeErrorField === 'name' && (
+                  <div className="absolute -top-10 right-2 z-30 pointer-events-none animate-bounce-diagonal">
+                    <ThickGoldArrow />
+                  </div>
+                )}
                 <label className="block text-xs font-bold uppercase text-gray-300 mb-1">Full Name *</label>
                 <input
                   type="text"
-                  required
                   placeholder="e.g. Ruwan Silva"
                   value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full bg-[#070707] border border-[#292929] focus:border-[#ffbd18] rounded-xl px-4 py-3 text-sm text-white outline-none"
+                  onChange={(e) => {
+                    setCustomerName(e.target.value);
+                    if (activeErrorField === 'name') setActiveErrorField(null);
+                  }}
+                  className={`w-full bg-[#070707] border rounded-xl px-4 py-3 text-sm text-white outline-none transition-all ${
+                    activeErrorField === 'name' 
+                      ? 'border-red-500 ring-2 ring-red-500/30' 
+                      : 'border-[#292929] focus:border-[#ffbd18]'
+                  }`}
                 />
               </div>
 
-              <div>
+              {/* 2. Phone Number */}
+              <div ref={fieldRefs.phone} className="relative">
+                {activeErrorField === 'phone' && (
+                  <div className="absolute -top-10 right-2 z-30 pointer-events-none animate-bounce-diagonal">
+                    <ThickGoldArrow />
+                  </div>
+                )}
                 <label className="block text-xs font-bold uppercase text-gray-300 mb-1">Phone Number *</label>
                 <input
                   type="tel"
-                  required
                   placeholder="e.g. 077 123 4567"
                   value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  className="w-full bg-[#070707] border border-[#292929] focus:border-[#ffbd18] rounded-xl px-4 py-3 text-sm text-white outline-none"
+                  onChange={(e) => {
+                    setPhoneNumber(e.target.value);
+                    if (activeErrorField === 'phone') setActiveErrorField(null);
+                  }}
+                  className={`w-full bg-[#070707] border rounded-xl px-4 py-3 text-sm text-white outline-none transition-all ${
+                    activeErrorField === 'phone' 
+                      ? 'border-red-500 ring-2 ring-red-500/30' 
+                      : 'border-[#292929] focus:border-[#ffbd18]'
+                  }`}
                 />
               </div>
 
+              {/* 3. Order Type Switcher */}
               <div>
                 <label className="block text-xs font-bold uppercase text-gray-300 mb-2">Order Type</label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={() => setDeliveryType('delivery')}
+                    onClick={() => {
+                      setDeliveryType('delivery');
+                      setActiveErrorField(null);
+                    }}
                     className={`py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider border transition-all ${deliveryType === 'delivery' ? 'bg-[#ffbd18] text-[#070707] border-[#ffbd18]' : 'bg-[#070707] text-gray-300 border-[#292929]'}`}
                   >
                     🛵 Home Delivery
                   </button>
                   <button
                     type="button"
-                    onClick={() => setDeliveryType('pickup')}
+                    onClick={() => {
+                      setDeliveryType('pickup');
+                      setActiveErrorField(null);
+                    }}
                     className={`py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider border transition-all ${deliveryType === 'pickup' ? 'bg-[#ffbd18] text-[#070707] border-[#ffbd18]' : 'bg-[#070707] text-gray-300 border-[#292929]'}`}
                   >
                     🏪 Store Pickup
@@ -383,43 +508,80 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
+              {/* Pickup Time Field */}
               {deliveryType === 'pickup' && (
-                <div>
+                <div ref={fieldRefs.pickupTime} className="relative">
+                  {activeErrorField === 'pickupTime' && (
+                    <div className="absolute -top-10 right-2 z-30 pointer-events-none animate-bounce-diagonal">
+                      <ThickGoldArrow />
+                    </div>
+                  )}
                   <label className="block text-xs font-bold uppercase text-gray-300 mb-1">Pickup Time (At least 30 mins from now) *</label>
                   <input
                     type="time"
-                    required
                     min={getMinPickupTime()}
                     value={pickupTime}
-                    onChange={(e) => setPickupTime(e.target.value)}
-                    className="w-full bg-[#070707] border border-[#292929] focus:border-[#ffbd18] rounded-xl px-4 py-3 text-sm text-white outline-none"
+                    onChange={(e) => {
+                      setPickupTime(e.target.value);
+                      if (activeErrorField === 'pickupTime') setActiveErrorField(null);
+                    }}
+                    className={`w-full bg-[#070707] border rounded-xl px-4 py-3 text-sm text-white outline-none transition-all ${
+                      activeErrorField === 'pickupTime' 
+                        ? 'border-red-500 ring-2 ring-red-500/30' 
+                        : 'border-[#292929] focus:border-[#ffbd18]'
+                    }`}
                   />
                 </div>
               )}
 
+              {/* Delivery Specific Fields */}
               {deliveryType === 'delivery' && (
                 <div className="space-y-3">
-                  <div>
+                  {/* Location Picker Field */}
+                  <div ref={fieldRefs.location} className="relative">
+                    {activeErrorField === 'location' && (
+                      <div className="absolute -top-10 right-2 z-30 pointer-events-none animate-bounce-diagonal">
+                        <ThickGoldArrow />
+                      </div>
+                    )}
                     <label className="block text-xs font-bold uppercase text-gray-300 mb-1">Delivery Location *</label>
                     <button
                       type="button"
                       onClick={() => setIsMapOpen(true)}
-                      className={`w-full py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all flex items-center justify-center gap-2 ${locationSelected && distanceKm !== null ? 'bg-green-500/10 border-green-500 text-green-400' : 'bg-[#181818] border-[#292929] text-[#ffbd18] hover:border-[#ffbd18]'}`}
+                      className={`w-full py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all flex items-center justify-center gap-2 ${
+                        activeErrorField === 'location'
+                          ? 'bg-red-500/10 border-red-500 text-red-400 ring-2 ring-red-500/30'
+                          : locationSelected && distanceKm !== null 
+                            ? 'bg-green-500/10 border-green-500 text-green-400' 
+                            : 'bg-[#181818] border-[#292929] text-[#ffbd18] hover:border-[#ffbd18]'
+                      }`}
                     >
                       <span>📍</span>
                       <span>{locationSelected && distanceKm !== null ? `Location Confirmed (${distanceKm.toFixed(2)} km away)` : 'Select Location on Map'}</span>
                     </button>
                   </div>
 
-                  <div>
+                  {/* Street Address Details Field */}
+                  <div ref={fieldRefs.address} className="relative">
+                    {activeErrorField === 'address' && (
+                      <div className="absolute -top-10 right-2 z-30 pointer-events-none animate-bounce-diagonal">
+                        <ThickGoldArrow />
+                      </div>
+                    )}
                     <label className="block text-xs font-bold uppercase text-gray-300 mb-1">Full Address Details *</label>
                     <textarea
-                      required
                       rows={3}
                       placeholder="e.g. No. 25/A, School Lane, Niwanthidiya, Piliyandala"
                       value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      className="w-full bg-[#070707] border border-[#292929] focus:border-[#ffbd18] rounded-xl px-4 py-3 text-sm text-white outline-none"
+                      onChange={(e) => {
+                        setAddress(e.target.value);
+                        if (activeErrorField === 'address') setActiveErrorField(null);
+                      }}
+                      className={`w-full bg-[#070707] border rounded-xl px-4 py-3 text-sm text-white outline-none transition-all ${
+                        activeErrorField === 'address' 
+                          ? 'border-red-500 ring-2 ring-red-500/30' 
+                          : 'border-[#292929] focus:border-[#ffbd18]'
+                      }`}
                     />
                   </div>
                 </div>
@@ -459,6 +621,7 @@ export default function CheckoutPage() {
           setSelectedLat(lat);
           setSelectedLng(lng);
           setLocationSelected(true);
+          if (activeErrorField === 'location') setActiveErrorField(null);
         }}
       />
 
@@ -497,6 +660,21 @@ export default function CheckoutPage() {
           </div>
         </div>
       )}
+
+      {/* Keyframe Animation for Diagonal Arrow Bouncing */}
+      <style jsx global>{`
+        @keyframes bounceDiagonal {
+          0%, 100% {
+            transform: translate(0, 0);
+          }
+          50% {
+            transform: translate(-6px, 8px);
+          }
+        }
+        .animate-bounce-diagonal {
+          animation: bounceDiagonal 0.7s infinite ease-in-out;
+        }
+      `}</style>
 
     </div>
   );
