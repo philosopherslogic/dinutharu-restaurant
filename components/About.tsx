@@ -33,11 +33,11 @@ const FEATURES = [
 export default function About() {
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Auto-play interval (switches feature every 4 seconds)
+  // Auto-play interval (switches feature every 8 seconds)
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % FEATURES.length);
-    }, 4000);
+    }, 8000); // Changed from 4000 to 8000 (8 seconds)
 
     return () => clearInterval(timer);
   }, []);
@@ -93,7 +93,6 @@ export default function About() {
                 />
               </div>
 
-              
             </div>
           </div>
 
@@ -113,7 +112,7 @@ export default function About() {
                   key={currentIndex}
                   className="h-full bg-gradient-to-r from-[#ffbd18] to-[#e52a20] rounded-full"
                   style={{
-                    animation: 'progress 4s linear forwards',
+                    animation: 'progress 8s linear forwards', // Changed from 4s to 8s
                   }}
                 />
               </div>
@@ -137,8 +136,10 @@ export default function About() {
             {/* Visual Indicators */}
             <div className="flex items-center gap-3 pt-2">
               {FEATURES.map((_, idx) => (
-                <div
+                <button
                   key={idx}
+                  type="button"
+                  onClick={() => setCurrentIndex(idx)}
                   className={`h-1.5 rounded-full transition-all duration-500 ${
                     currentIndex === idx ? 'w-10 bg-[#ffbd18]' : 'w-2.5 bg-[#222222]'
                   }`}
