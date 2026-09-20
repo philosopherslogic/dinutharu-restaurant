@@ -82,7 +82,7 @@ const LeafletMapInner: FC<MapContentProps> = ({
 
   function MapClickHandler() {
     useMapEvents({
-      click(e) {
+      click(e: import('leaflet').LeafletMouseEvent) {
         // Flag as manual tap before triggering coordinate change
         isManualTapRef.current = true;
         onLocationSelect(e.latlng.lat, e.latlng.lng);
