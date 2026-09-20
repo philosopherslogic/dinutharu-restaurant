@@ -50,7 +50,7 @@ export default function Hero() {
       {/* 1. Background Video & Soft Ambient Masks */}
       <div className="absolute inset-0 z-0">
         <video
-          poster="/hero-thumb.jpg"
+          poster="/logo.jpg"
           autoPlay
           loop
           muted

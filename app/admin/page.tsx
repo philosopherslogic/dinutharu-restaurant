@@ -206,7 +206,7 @@ export default function AdminDashboard() {
     const sanitizedName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
     const fileName = `${Date.now()}-${sanitizedName}`;
     
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from('restaurant-assets')
       .upload(fileName, file, {
         cacheControl: '3600',
@@ -321,20 +321,19 @@ export default function AdminDashboard() {
     }
   }
 
-  // --- FIXED Store Settings Toggles (with Upsert logic) ---
+  // --- Store Settings Toggles ---
   async function toggleStoreOpen() {
     const nextStatus = !isStoreOpen;
-    setIsStoreOpen(nextStatus); // Optimistic UI update
+    setIsStoreOpen(nextStatus);
 
     if (settingsId) {
       const { error } = await supabase.from('store_settings').update({ is_open: nextStatus }).eq('id', settingsId);
       if (error) {
         console.error('Failed to update store open state:', error);
         alert(`Error updating status: ${error.message}`);
-        setIsStoreOpen(!nextStatus); // revert on failure
+        setIsStoreOpen(!nextStatus);
       }
     } else {
-      // If store_settings table was empty, insert default row
       const { data, error } = await supabase.from('store_settings').insert([{ is_open: nextStatus }]).select();
       if (!error && data && data.length > 0) {
         setSettingsId(data[0].id);
@@ -443,91 +442,119 @@ export default function AdminDashboard() {
                   {orders.length === 0 ? (
                     <p className="text-gray-500 text-sm">No orders recorded yet.</p>
                   ) : (
-                    orders.map((order) => (
-                      <div key={order.id} className="bg-[#121212] border border-[#292929] rounded-2xl p-6 flex flex-col md:flex-row md:items-start justify-between gap-6 shadow-xl">
-                        <div className="space-y-3 flex-1">
-                          
-                          {/* Order ID + Status Badge */}
-                          <div className="flex items-center gap-3">
-                            <span className="font-black text-lg text-[#ffbd18]">#{order.order_code || 'ORD'}</span>
-                            <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full border ${getStatusBadgeColor(order.status)}`}>
-                              {order.status.replace('_', ' ')}
-                            </span>
+                    orders.map((order) => {
+                      // Calculate item subtotal safely
+                      const itemsSubtotal = order.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0) || 0;
+                      
+                      // Calculate or fall back for delivery fee
+                      const effectiveDeliveryFee = order.delivery_type === 'delivery' 
+                        ? (order.delivery_fee !== undefined ? order.delivery_fee : Math.max(0, order.total_price - itemsSubtotal)) 
+                        : 0;
+
+                      return (
+                        <div key={order.id} className="bg-[#121212] border border-[#292929] rounded-2xl p-6 flex flex-col md:flex-row md:items-start justify-between gap-6 shadow-xl">
+                          <div className="space-y-3 flex-1">
+                            
+                            {/* Order ID + Status Badge */}
+                            <div className="flex items-center gap-3">
+                              <span className="font-black text-lg text-[#ffbd18]">#{order.order_code || 'ORD'}</span>
+                              <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full border ${getStatusBadgeColor(order.status)}`}>
+                                {order.status.replace('_', ' ')}
+                              </span>
+                            </div>
+
+                            {/* EXACT ORDER DATE & TIME BADGE */}
+                            <div className="p-2.5 bg-[#070707] border border-[#222222] rounded-xl flex items-center gap-2 text-xs font-bold text-gray-300 w-fit">
+                              <span>🕒 Order Placed:</span>
+                              <span className="text-[#ffbd18]">
+                                {order.created_at ? new Date(order.created_at).toLocaleString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                  hour12: true
+                                }) : 'N/A'}
+                              </span>
+                            </div>
+
+                            <div>
+                              <h3 className="text-lg font-bold text-white">{order.customer_name}</h3>
+                              <a href={`tel:${order.phone}`} className="text-xs text-[#ffbd18] hover:underline font-semibold block mt-0.5">📞 {order.phone}</a>
+                            </div>
+
+                            <div className="bg-[#070707] p-3.5 rounded-xl border border-[#1f1f1f] text-xs space-y-1">
+                              {order.delivery_type === 'delivery' ? (
+                                <>
+                                  <p className="font-bold text-green-400">🛵 Home Delivery ({order.distance_km ? order.distance_km.toFixed(2) : 0} km away)</p>
+                                  <p className="text-gray-300 mt-1"><strong className="text-gray-400">Address:</strong> {order.address || 'N/A'}</p>
+                                </>
+                              ) : (
+                                <p className="font-bold text-amber-400">🏪 Store Pickup scheduled at: <span className="text-white font-extrabold">{order.pickup_time || 'Not specified'}</span></p>
+                              )}
+                            </div>
+
+                            {order.notes && (
+                              <p className="text-xs text-amber-300 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20">📝 <strong>Note:</strong> {order.notes}</p>
+                            )}
+
+                            {/* ORDER ITEMS LIST */}
+                            <div className="bg-[#070707] p-3.5 rounded-xl border border-[#1f1f1f] text-xs space-y-1.5">
+                              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Items Ordered:</p>
+                              {order.items?.map((item, idx) => (
+                                <div key={idx} className="flex justify-between items-center">
+                                  <span className="text-white font-medium">• {item.quantity}x {item.title || item.name}</span>
+                                  <span className="text-gray-400">LKR {item.price * item.quantity}</span>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* PRICE BREAKDOWN & DELIVERY FEE DISPLAY */}
+                            <div className="bg-[#090909] p-3.5 rounded-xl border border-[#222222] space-y-1.5 text-xs">
+                              <div className="flex justify-between items-center text-gray-400">
+                                <span>Items Subtotal:</span>
+                                <span>LKR {itemsSubtotal}</span>
+                              </div>
+
+                              <div className="flex justify-between items-center text-gray-300 font-semibold">
+                                <span>
+                                  🛵 Delivery Fee {order.delivery_type === 'delivery' && order.distance_km ? `(${order.distance_km.toFixed(1)} km)` : ''}:
+                                </span>
+                                <span className={order.delivery_type === 'delivery' ? 'text-[#ffbd18] font-bold' : 'text-gray-500'}>
+                                  {order.delivery_type === 'delivery' ? `LKR ${effectiveDeliveryFee}` : 'Free (Pickup)'}
+                                </span>
+                              </div>
+
+                              <div className="pt-2 flex items-center justify-between text-sm border-t border-[#222]">
+                                <span className="text-xs text-gray-400 font-bold uppercase">Total Charged:</span>
+                                <span className="text-lg font-black text-[#ffbd18]">LKR {order.total_price}</span>
+                              </div>
+                            </div>
+
                           </div>
 
-                          {/* EXACT ORDER DATE & TIME BADGE */}
-                          <div className="p-2.5 bg-[#070707] border border-[#222222] rounded-xl flex items-center gap-2 text-xs font-bold text-gray-300 w-fit">
-                            <span>🕒 Order Placed:</span>
-                            <span className="text-[#ffbd18]">
-                              {order.created_at ? new Date(order.created_at).toLocaleString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                                hour: 'numeric',
-                                minute: '2-digit',
-                                hour12: true
-                              }) : 'N/A'}
-                            </span>
-                          </div>
-
-                          <div>
-                            <h3 className="text-lg font-bold text-white">{order.customer_name}</h3>
-                            <a href={`tel:${order.phone}`} className="text-xs text-[#ffbd18] hover:underline font-semibold block mt-0.5">📞 {order.phone}</a>
-                          </div>
-
-                          <div className="bg-[#070707] p-3.5 rounded-xl border border-[#1f1f1f] text-xs space-y-1">
-                            {order.delivery_type === 'delivery' ? (
+                          <div className="flex flex-col gap-2 min-w-[200px]">
+                            {order.delivery_type === 'delivery' && (
+                              <a href={getGoogleMapsDirectionsUrl(order)} target="_blank" rel="noopener noreferrer" className="w-full py-2.5 px-4 bg-[#181818] border border-[#292929] hover:border-green-500 text-green-400 hover:text-white text-xs font-bold uppercase rounded-xl transition-all flex items-center justify-center gap-2 shadow-md mb-2">
+                                <span>📍</span> Open in Maps
+                              </a>
+                            )}
+                            {order.status === 'pending' && (
                               <>
-                                <p className="font-bold text-green-400">🛵 Home Delivery ({order.distance_km ? order.distance_km.toFixed(2) : 0} km away)</p>
-                                <p className="text-gray-300 mt-1"><strong className="text-gray-400">Address:</strong> {order.address || 'N/A'}</p>
+                                <button onClick={() => updateOrderStatus(order.id, 'accepted')} className="w-full py-3 bg-[#20c45a] hover:bg-[#1bb050] text-white font-black text-xs uppercase rounded-xl transition-all shadow-lg">✓ Accept Order</button>
+                                <button onClick={() => updateOrderStatus(order.id, 'cancelled')} className="w-full py-2 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/30 text-xs font-bold uppercase rounded-xl transition-all">✕ Decline Order</button>
                               </>
-                            ) : (
-                              <p className="font-bold text-amber-400">🏪 Store Pickup scheduled at: <span className="text-white font-extrabold">{order.pickup_time || 'Not specified'}</span></p>
+                            )}
+                            {order.status === 'accepted' && <button onClick={() => updateOrderStatus(order.id, 'preparing')} className="w-full py-3 bg-[#ffbd18] hover:bg-[#e0a410] text-[#070707] font-black text-xs uppercase rounded-xl transition-all shadow-lg">👨‍🍳 Set to "Preparing"</button>}
+                            {order.status === 'preparing' && <button onClick={() => updateOrderStatus(order.id, 'in_delivery')} className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-black text-xs uppercase rounded-xl transition-all shadow-lg">🛵 Set to "In Delivery"</button>}
+                            {order.status === 'in_delivery' && <button onClick={() => updateOrderStatus(order.id, 'completed')} className="w-full py-3 bg-green-500 hover:bg-green-600 text-black font-black text-xs uppercase rounded-xl transition-all shadow-lg">🎉 Mark as "Completed"</button>}
+                            {order.status !== 'completed' && order.status !== 'cancelled' && order.status !== 'pending' && (
+                              <button onClick={() => updateOrderStatus(order.id, 'cancelled')} className="w-full py-1.5 text-[11px] text-red-400 hover:underline font-bold uppercase mt-1 text-center">Cancel Order</button>
                             )}
                           </div>
-
-                          {order.notes && (
-                            <p className="text-xs text-amber-300 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20">📝 <strong>Note:</strong> {order.notes}</p>
-                          )}
-
-                          <div className="bg-[#070707] p-3.5 rounded-xl border border-[#1f1f1f] text-xs space-y-1.5">
-                            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Items Ordered:</p>
-                            {order.items?.map((item, idx) => (
-                              <div key={idx} className="flex justify-between items-center">
-                                <span className="text-white font-medium">• {item.quantity}x {item.title || item.name}</span>
-                                <span className="text-gray-400">LKR {item.price * item.quantity}</span>
-                              </div>
-                            ))}
-                          </div>
-
-                          <div className="pt-2 flex items-center justify-between text-sm border-t border-[#222]">
-                            <span className="text-xs text-gray-400 font-bold uppercase">Total Charged:</span>
-                            <span className="text-lg font-black text-[#ffbd18]">LKR {order.total_price}</span>
-                          </div>
-
                         </div>
-
-                        <div className="flex flex-col gap-2 min-w-[200px]">
-                          {order.delivery_type === 'delivery' && (
-                            <a href={getGoogleMapsDirectionsUrl(order)} target="_blank" rel="noopener noreferrer" className="w-full py-2.5 px-4 bg-[#181818] border border-[#292929] hover:border-green-500 text-green-400 hover:text-white text-xs font-bold uppercase rounded-xl transition-all flex items-center justify-center gap-2 shadow-md mb-2">
-                              <span>📍</span> Open in Maps
-                            </a>
-                          )}
-                          {order.status === 'pending' && (
-                            <>
-                              <button onClick={() => updateOrderStatus(order.id, 'accepted')} className="w-full py-3 bg-[#20c45a] hover:bg-[#1bb050] text-white font-black text-xs uppercase rounded-xl transition-all shadow-lg">✓ Accept Order</button>
-                              <button onClick={() => updateOrderStatus(order.id, 'cancelled')} className="w-full py-2 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/30 text-xs font-bold uppercase rounded-xl transition-all">✕ Decline Order</button>
-                            </>
-                          )}
-                          {order.status === 'accepted' && <button onClick={() => updateOrderStatus(order.id, 'preparing')} className="w-full py-3 bg-[#ffbd18] hover:bg-[#e0a410] text-[#070707] font-black text-xs uppercase rounded-xl transition-all shadow-lg">👨‍🍳 Set to "Preparing"</button>}
-                          {order.status === 'preparing' && <button onClick={() => updateOrderStatus(order.id, 'in_delivery')} className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-black text-xs uppercase rounded-xl transition-all shadow-lg">🛵 Set to "In Delivery"</button>}
-                          {order.status === 'in_delivery' && <button onClick={() => updateOrderStatus(order.id, 'completed')} className="w-full py-3 bg-green-500 hover:bg-green-600 text-black font-black text-xs uppercase rounded-xl transition-all shadow-lg">🎉 Mark as "Completed"</button>}
-                          {order.status !== 'completed' && order.status !== 'cancelled' && order.status !== 'pending' && (
-                            <button onClick={() => updateOrderStatus(order.id, 'cancelled')} className="w-full py-1.5 text-[11px] text-red-400 hover:underline font-bold uppercase mt-1 text-center">Cancel Order</button>
-                          )}
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
