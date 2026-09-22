@@ -129,7 +129,7 @@ export default function Promos() {
           <h2 className="text-4xl sm:text-6xl font-black text-white tracking-tight leading-tight">
             Chef Specials & <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ffbd18] via-amber-200 to-[#e52a20] animate-pulse">
-              Exclusive Combo Offers
+              Exclusive Offers
             </span>
           </h2>
           <p className="text-gray-400 text-xs sm:text-sm max-w-xl mx-auto leading-relaxed">
