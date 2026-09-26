@@ -56,7 +56,7 @@ export default function AdminDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [promos, setPromos] = useState<PromoItem[]>([]);
-  
+  const [isTempClosed, setIsTempClosed] = useState(false);
   // Delivery & Store Status Toggles
   const [isStoreOpen, setIsStoreOpen] = useState(true);
   const [directDeliveryEnabled, setDirectDeliveryEnabled] = useState(true);
@@ -93,7 +93,7 @@ export default function AdminDashboard() {
         audioRef.current.play().then(() => {
           audioRef.current?.pause();
           if (audioRef.current) audioRef.current.currentTime = 0;
-        }).catch(() => {});
+        }).catch(() => { });
       }
       window.removeEventListener('click', unlockAudio);
     };
@@ -177,6 +177,7 @@ export default function AdminDashboard() {
       const { data } = await supabase.from('store_settings').select('*').limit(1).maybeSingle();
       if (data) {
         setIsStoreOpen(data.is_open ?? true);
+        setIsTempClosed(data.is_temp_closed ?? false); // <--- LOAD TEMP CLOSED STATE
         setDirectDeliveryEnabled(data.direct_delivery_enabled ?? true);
         setUbereatsEnabled(data.ubereats_enabled ?? true);
         setPickmeEnabled(data.pickme_enabled ?? true);
@@ -184,6 +185,28 @@ export default function AdminDashboard() {
       }
     } catch (err) {
       console.error('Settings error:', err);
+    }
+  }
+  async function toggleTempClosed() {
+    const nextStatus = !isTempClosed;
+    setIsTempClosed(nextStatus); // Optimistic UI update
+
+    if (settingsId) {
+      const { error } = await supabase
+        .from('store_settings')
+        .update({ is_temp_closed: nextStatus })
+        .eq('id', settingsId);
+
+      if (error) {
+        console.error('Failed to update temp closed state:', error);
+        setIsTempClosed(!nextStatus); // Revert on failure
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('store_settings')
+        .insert([{ is_temp_closed: nextStatus }])
+        .select();
+      if (!error && data && data.length > 0) setSettingsId(data[0].id);
     }
   }
 
@@ -202,17 +225,17 @@ export default function AdminDashboard() {
   // --- Shared Image Upload Logic ---
   async function handleImageUpload(file: File): Promise<string | null> {
     setUploadingImage(true);
-    
+
     const sanitizedName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
     const fileName = `${Date.now()}-${sanitizedName}`;
-    
+
     const { error } = await supabase.storage
       .from('restaurant-assets')
       .upload(fileName, file, {
         cacheControl: '3600',
         upsert: false
       });
-      
+
     setUploadingImage(false);
 
     if (error) {
@@ -278,7 +301,7 @@ export default function AdminDashboard() {
 
   async function handleAddPromo(imageUrl: string) {
     if (!newPromoTitle || !newPromoPrice || !newPromoOrigPrice || !imageUrl) return alert('Fill out all promo fields and image.');
-    
+
     const { data, error } = await supabase.from('promos').insert([{
       badge: newPromoBadge,
       title: newPromoTitle,
@@ -445,16 +468,16 @@ export default function AdminDashboard() {
                     orders.map((order) => {
                       // Calculate item subtotal safely
                       const itemsSubtotal = order.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0) || 0;
-                      
+
                       // Calculate or fall back for delivery fee
-                      const effectiveDeliveryFee = order.delivery_type === 'delivery' 
-                        ? (order.delivery_fee !== undefined ? order.delivery_fee : Math.max(0, order.total_price - itemsSubtotal)) 
+                      const effectiveDeliveryFee = order.delivery_type === 'delivery'
+                        ? (order.delivery_fee !== undefined ? order.delivery_fee : Math.max(0, order.total_price - itemsSubtotal))
                         : 0;
 
                       return (
                         <div key={order.id} className="bg-[#121212] border border-[#292929] rounded-2xl p-6 flex flex-col md:flex-row md:items-start justify-between gap-6 shadow-xl">
                           <div className="space-y-3 flex-1">
-                            
+
                             {/* Order ID + Status Badge */}
                             <div className="flex items-center gap-3">
                               <span className="font-black text-lg text-[#ffbd18]">#{order.order_code || 'ORD'}</span>
@@ -586,6 +609,8 @@ export default function AdminDashboard() {
                     <select value={newCategory} onChange={(e) => setNewCategory(e.target.value)} className="bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm outline-none">
                       <option value="rice">Fried Rice</option>
                       <option value="nasi-goreng">Nasi Goreng</option>
+                      <option value="kottu">Kottu</option>
+
                       <option value="sides">Sides</option>
                       <option value="drinks">Drinks</option>
                     </select>
@@ -615,9 +640,8 @@ export default function AdminDashboard() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => toggleMenuStock(item.id, item.is_available)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase border transition-all ${
-                            item.is_available ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30'
-                          }`}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase border transition-all ${item.is_available ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30'
+                            }`}
                         >
                           {item.is_available ? 'In Stock' : 'Out of Stock'}
                         </button>
@@ -651,7 +675,7 @@ export default function AdminDashboard() {
                   className="bg-[#121212] border border-[#292929] rounded-2xl p-6 space-y-4 shadow-xl"
                 >
                   <h3 className="text-sm font-bold text-[#ffbd18] uppercase tracking-wider">Add New Promotion</h3>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <input type="text" placeholder="Promo Title (e.g. Combo Special)" required value={newPromoTitle} onChange={(e) => setNewPromoTitle(e.target.value)} className="w-full bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm outline-none focus:border-[#ffbd18]" />
                     <input type="text" placeholder="Badge Text (e.g. Special Offer)" required value={newPromoBadge} onChange={(e) => setNewPromoBadge(e.target.value)} className="w-full bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm outline-none focus:border-[#ffbd18]" />
@@ -663,7 +687,7 @@ export default function AdminDashboard() {
                   </div>
 
                   <textarea rows={2} placeholder="Appetizing Description" required value={newPromoDesc} onChange={(e) => setNewPromoDesc(e.target.value)} className="w-full bg-[#070707] border border-[#292929] p-3 rounded-xl text-sm outline-none focus:border-[#ffbd18]" />
-                  
+
                   <div className="flex items-center justify-between gap-4 border-t border-[#222222] pt-4">
                     <input id="promo-img-input" type="file" accept="image/*" className="text-xs text-gray-400" />
                     <button type="submit" disabled={uploadingImage} className="px-6 py-2.5 bg-[#ffbd18] text-[#070707] font-black text-xs uppercase rounded-xl hover:bg-[#e0a410] shadow-lg">
@@ -678,7 +702,7 @@ export default function AdminDashboard() {
                   ) : (
                     promos.map((promo) => (
                       <div key={promo.id} className="bg-[#121212] border border-[#292929] rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-6 shadow-lg">
-                        
+
                         <div className="flex items-center gap-4 w-full md:w-auto">
                           <div className="relative w-24 h-24 rounded-xl overflow-hidden bg-[#070707] flex-shrink-0 border border-[#222]">
                             <Image src={promo.image_url} alt={promo.title} fill className="object-cover" />
@@ -696,9 +720,8 @@ export default function AdminDashboard() {
                         <div className="flex items-center gap-2 w-full md:w-auto justify-end">
                           <button
                             onClick={() => togglePromoActive(promo.id, promo.is_active)}
-                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase border transition-all ${
-                              promo.is_active ? 'bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500 hover:text-black' : 'bg-[#181818] text-gray-400 border-[#333] hover:text-white'
-                            }`}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase border transition-all ${promo.is_active ? 'bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500 hover:text-black' : 'bg-[#181818] text-gray-400 border-[#333] hover:text-white'
+                              }`}
                           >
                             {promo.is_active ? 'Active' : 'Hidden'}
                           </button>
@@ -721,7 +744,7 @@ export default function AdminDashboard() {
               <div className="space-y-6">
                 <h1 className="text-2xl font-black">Store Operations & Channels</h1>
                 <div className="bg-[#121212] border border-[#292929] rounded-2xl p-6 space-y-6">
-                  
+
                   {/* STORE OPEN / CLOSED MANUAL TOGGLE */}
                   <div className="flex items-center justify-between pb-4 border-b border-[#222222]">
                     <div>
@@ -731,14 +754,35 @@ export default function AdminDashboard() {
                     <button
                       type="button"
                       onClick={toggleStoreOpen}
-                      className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer ${
-                        isStoreOpen ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'bg-[#e52a20] text-white shadow-lg shadow-red-500/20'
-                      }`}
+                      className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer ${isStoreOpen ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'bg-[#e52a20] text-white shadow-lg shadow-red-500/20'
+                        }`}
                     >
                       {isStoreOpen ? 'STORE IS OPEN' : 'STORE IS CLOSED'}
                     </button>
                   </div>
+                  {/* Store temporarily closed/*}
+                  {/* TEMPORARY CLOSED TOGGLE SWITCH */}
+                  <div className="flex items-center justify-between pb-4 border-b border-[#222222]">
+                    <div>
+                      <h3 className="text-base font-bold text-white flex items-center gap-2">
+                        <span>🛑</span> Temporary Close Store Today
+                      </h3>
+                      <p className="text-xs text-gray-400 mt-1">
+                        When turned ON, displays &quot;The restaurant is temporarily closed today&quot; banner on the home page.
+                      </p>
+                    </div>
 
+                    <button
+                      type="button"
+                      onClick={toggleTempClosed}
+                      className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer ${isTempClosed
+                          ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20'
+                          : 'bg-[#181818] text-gray-400 border border-[#333]'
+                        }`}
+                    >
+                      {isTempClosed ? 'TEMP CLOSED: ON' : 'TEMP CLOSED: OFF'}
+                    </button>
+                  </div>
                   <div className="flex items-center justify-between pb-4 border-b border-[#222222]">
                     <div>
                       <h3 className="text-base font-bold text-white">DinuTharu Direct Delivery</h3>
@@ -747,9 +791,8 @@ export default function AdminDashboard() {
                     <button
                       type="button"
                       onClick={toggleDirectDelivery}
-                      className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer ${
-                        directDeliveryEnabled ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'bg-[#e52a20] text-white shadow-lg shadow-red-500/20'
-                      }`}
+                      className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer ${directDeliveryEnabled ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'bg-[#e52a20] text-white shadow-lg shadow-red-500/20'
+                        }`}
                     >
                       {directDeliveryEnabled ? 'ENABLED' : 'DISABLED'}
                     </button>
@@ -763,9 +806,8 @@ export default function AdminDashboard() {
                     <button
                       type="button"
                       onClick={toggleUberEats}
-                      className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer ${
-                        ubereatsEnabled ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'bg-[#e52a20] text-white shadow-lg shadow-red-500/20'
-                      }`}
+                      className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer ${ubereatsEnabled ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'bg-[#e52a20] text-white shadow-lg shadow-red-500/20'
+                        }`}
                     >
                       {ubereatsEnabled ? 'ENABLED' : 'DISABLED'}
                     </button>
@@ -779,9 +821,8 @@ export default function AdminDashboard() {
                     <button
                       type="button"
                       onClick={togglePickMe}
-                      className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer ${
-                        pickmeEnabled ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'bg-[#e52a20] text-white shadow-lg shadow-red-500/20'
-                      }`}
+                      className={`px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer ${pickmeEnabled ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' : 'bg-[#e52a20] text-white shadow-lg shadow-red-500/20'
+                        }`}
                     >
                       {pickmeEnabled ? 'ENABLED' : 'DISABLED'}
                     </button>
@@ -828,7 +869,7 @@ export default function AdminDashboard() {
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#121212] border border-[#292929] rounded-3xl p-6 max-w-md w-full space-y-4 text-white shadow-2xl">
             <h3 className="text-lg font-bold text-[#ffbd18]">Edit Promo Deal</h3>
-            
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Title</label>

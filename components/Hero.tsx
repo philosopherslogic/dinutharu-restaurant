@@ -6,18 +6,20 @@ import { supabase } from '@/lib/supabaseClient';
 
 export default function Hero() {
   const [isOpen, setIsOpen] = useState<boolean | null>(null);
+  const [isTempClosed, setIsTempClosed] = useState<boolean>(false);
 
   useEffect(() => {
     // 1. Fetch live store status on load
     async function fetchStoreStatus() {
       const { data } = await supabase
         .from('store_settings')
-        .select('is_open')
+        .select('is_open, is_temp_closed')
         .limit(1)
         .maybeSingle();
 
-      if (data && typeof data.is_open === 'boolean') {
-        setIsOpen(data.is_open);
+      if (data) {
+        if (typeof data.is_open === 'boolean') setIsOpen(data.is_open);
+        if (typeof data.is_temp_closed === 'boolean') setIsTempClosed(data.is_temp_closed);
       } else {
         setIsOpen(true); // Fallback default
       }
@@ -32,8 +34,9 @@ export default function Hero() {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'store_settings' },
         (payload) => {
-          if (payload.new && typeof payload.new.is_open === 'boolean') {
-            setIsOpen(payload.new.is_open);
+          if (payload.new) {
+            if (typeof payload.new.is_open === 'boolean') setIsOpen(payload.new.is_open);
+            if (typeof payload.new.is_temp_closed === 'boolean') setIsTempClosed(payload.new.is_temp_closed);
           }
         }
       )
@@ -44,9 +47,11 @@ export default function Hero() {
     };
   }, []);
 
+  const effectiveClosed = isOpen === false || isTempClosed;
+
   return (
     <header id="home" className="relative min-h-screen pt-28 pb-20 md:pb-24 flex flex-col justify-center items-center bg-[#070707] overflow-hidden">
-      
+
       {/* 1. Background Video & Soft Ambient Masks */}
       <div className="absolute inset-0 z-0">
         <video
@@ -72,35 +77,48 @@ export default function Hero() {
 
       {/* 2. Hero Content Container */}
       <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 w-full text-center">
-        
+
         <div className="space-y-6 sm:space-y-8 flex flex-col items-center">
-          
-          {/* Live Operational Status + Opening Hours Badge */}
-          <div className="inline-flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 bg-[#121212]/90 border border-[#2a2a2a] px-4 sm:px-5 py-2 rounded-full shadow-2xl backdrop-blur-md">
-            
-            {/* Dynamic Status Indicator */}
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isOpen === false ? 'bg-red-400' : 'bg-green-400'}`} />
-                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isOpen === false ? 'bg-red-500' : 'bg-green-500'}`} />
-              </span>
-              <span className={`text-[10px] sm:text-xs font-black uppercase tracking-wider ${isOpen === false ? 'text-red-400' : 'text-green-400'}`}>
-                {isOpen === false ? 'CLOSED NOW' : 'OPEN NOW'}
-              </span>
+
+          {/* Live Operational Status + Opening Hours Area */}
+          <div className="flex flex-col items-center gap-2.5">
+            <div className="inline-flex items-center justify-center gap-3 bg-[#121212]/90 border border-[#2a2a2a] px-4 sm:px-5 py-2 rounded-full shadow-2xl backdrop-blur-md">
+
+              {/* Dynamic Status Indicator */}
+              <div className="flex items-center gap-2 pr-2 border-r border-[#262626]">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${effectiveClosed ? 'bg-red-400' : 'bg-green-400'}`} />
+                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${effectiveClosed ? 'bg-red-500' : 'bg-green-500'}`} />
+                </span>
+                <span className={`text-[10px] sm:text-xs font-black uppercase tracking-wider ${effectiveClosed ? 'text-red-400' : 'text-green-400'}`}>
+                  {effectiveClosed ? 'CLOSED' : 'OPEN'}
+                </span>
+              </div>
+
+              {/* Operating Hours Details */}
+              <div className="flex items-center gap-2">
+                <span className="text-base text-gray-400">🕒</span>
+                <div className="text-left text-[10px] sm:text-[11px] font-bold leading-tight">
+                  <p className="text-gray-300">
+                    <span className="text-gray-500 font-black">WKDAYS:</span> <span className="text-[#ffbd18]">3.30 PM - 12.30 AM</span>
+                  </p>
+                  <p className="text-gray-300">
+                    <span className="text-amber-500 font-black">WKENDS:</span> <span className="text-[#ffbd18]">10.00 AM - 12.30 AM</span>
+                  </p>
+                </div>
+              </div>
+
             </div>
 
-            <span className="text-[#333]">|</span>
-
-            {/* Operating Hours */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm">🕒</span>
-              <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-[#ffbd18] to-amber-400">
-                3.30PM - 12.30AM
-              </span>
-            </div>
-
+            {/* Temporarily Closed Banner Notice */}
+            {isTempClosed && (
+              <div className="animate-bounce inline-flex items-center gap-2 bg-red-500/15 border border-red-500/40 text-red-400 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-lg">
+                <span>⚠️</span>
+                <span>The restaurant is temporarily closed today</span>
+              </div>
+            )}
           </div>
-
+          
           {/* Alive Brand Title */}
           <div className="space-y-1 drop-shadow-2xl relative">
             <h1 className="text-5xl sm:text-7xl lg:text-8xl font-black text-white tracking-tight leading-[1.02]">

@@ -9,6 +9,8 @@ import { MenuItem } from '@/types';
 const categories = [
   { id: 'all', label: 'All Dishes', icon: '🍽️' },
   { id: 'nasi-goreng', label: 'Nasi Goreng', icon: '🔥' },
+  { id: 'kottu', label: 'Kottu', icon: '🍽️' },
+
   { id: 'rice', label: 'Fried Rice', icon: '🍚' },
   { id: 'sides', label: 'Sides', icon: '🍗' },
   { id: 'drinks', label: 'Drinks', icon: '🥤' },
@@ -18,7 +20,7 @@ export default function MenuGrid() {
   const [activeCategory, setActiveCategory] = useState('all');
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   // Store Operational Status States
   const [isStoreOpen, setIsStoreOpen] = useState<boolean | null>(null);
   const [showClosedModal, setShowClosedModal] = useState(false);
@@ -120,7 +122,7 @@ export default function MenuGrid() {
 
   return (
     <section id="menu" className="py-24 bg-[#050505] text-white relative overflow-hidden border-t border-[#181818]">
-      
+
       {/* Dynamic Background FX & Ambient Glows */}
       <div className="absolute inset-0 pointer-events-none z-0">
         <div className="absolute top-1/4 -right-20 w-[600px] h-[600px] bg-[#ffbd18]/5 rounded-full blur-[150px] animate-pulse" />
@@ -128,7 +130,7 @@ export default function MenuGrid() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        
+
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-16 space-y-3">
           <span className="text-[#ffbd18] bg-[#ffbd18]/10 border border-[#ffbd18]/20 px-4 py-1.5 rounded-full text-[10px] font-black tracking-[0.25em] uppercase inline-block shadow-sm">
@@ -150,11 +152,10 @@ export default function MenuGrid() {
               <button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
-                className={`px-5 py-2.5 rounded-full font-black text-xs uppercase tracking-wider transition-all duration-300 flex items-center gap-2 ${
-                  isActive
+                className={`px-5 py-2.5 rounded-full font-black text-xs uppercase tracking-wider transition-all duration-300 flex items-center gap-2 ${isActive
                     ? 'bg-gradient-to-r from-[#ffbd18] to-amber-500 text-[#070707] shadow-lg shadow-[#ffbd18]/20 scale-105'
                     : 'bg-[#121212] text-gray-400 border border-[#222222] hover:border-[#ffbd18]/40 hover:text-white'
-                }`}
+                  }`}
               >
                 <span>{cat.icon}</span>
                 <span>{cat.label}</span>
@@ -179,11 +180,10 @@ export default function MenuGrid() {
             {filteredItems.map((item) => (
               <div
                 key={item.id}
-                className={`bg-gradient-to-b from-[#121212] to-[#080808] border rounded-3xl overflow-hidden flex flex-col justify-between group transition-all duration-500 shadow-2xl relative ${
-                  !item.isAvailable
+                className={`bg-gradient-to-b from-[#121212] to-[#080808] border rounded-3xl overflow-hidden flex flex-col justify-between group transition-all duration-500 shadow-2xl relative ${!item.isAvailable
                     ? 'opacity-60 border-red-500/20'
                     : 'border-[#222222] hover:border-[#ffbd18]/60 hover:shadow-[#ffbd18]/10'
-                }`}
+                  }`}
               >
                 <div>
                   {/* Aspect-Square Responsive Image Container */}
@@ -193,11 +193,10 @@ export default function MenuGrid() {
                       alt={item.title}
                       fill
                       sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                      className={`object-cover transition-transform duration-700 ease-out ${
-                        item.isAvailable ? 'group-hover:scale-105' : 'grayscale'
-                      }`}
+                      className={`object-cover transition-transform duration-700 ease-out ${item.isAvailable ? 'group-hover:scale-105' : 'grayscale'
+                        }`}
                     />
-                    
+
                     {/* Soft Dark Bottom Gradient */}
                     <div className="absolute inset-0 bg-gradient-to-t from-[#080808] via-transparent to-transparent opacity-80 pointer-events-none" />
 
@@ -220,16 +219,15 @@ export default function MenuGrid() {
                   <div className="p-6 sm:p-7 space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <h3
-                        className={`text-xl font-black transition-colors leading-tight ${
-                          item.isAvailable
+                        className={`text-xl font-black transition-colors leading-tight ${item.isAvailable
                             ? 'group-hover:text-[#ffbd18] text-white'
                             : 'text-gray-400'
-                        }`}
+                          }`}
                       >
                         {item.title}
                       </h3>
                     </div>
-                    
+
                     <p className="text-gray-400 text-xs sm:text-sm line-clamp-2 leading-relaxed">
                       {item.description || 'Authentic wok-fried specialty prepared with signature spices and fresh ingredients.'}
                     </p>
@@ -277,7 +275,7 @@ export default function MenuGrid() {
       {showClosedModal && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-[#121212] border border-[#2a2a2a] rounded-3xl p-6 sm:p-8 max-w-md w-full text-center space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            
+
             <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mx-auto text-3xl">
               🌙
             </div>
